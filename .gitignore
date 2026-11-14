@@ -1,0 +1,15 @@
+# secrets - never commit
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# vector store built locally
+chroma_db/
+*.faiss

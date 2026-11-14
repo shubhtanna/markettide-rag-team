@@ -1,0 +1,31 @@
+/* Read-only copy: everything looks the same but nothing reacts, except the chatbot links. */
+:root {
+  --font-sans: "Inter";
+  --font-serif: "Instrument Serif";
+}
+body * {
+  pointer-events: none;
+}
+.fake-link {
+  cursor: default;
+}
+.nav-links .fake-link {
+  color: inherit;
+  opacity: 0.85;
+  font-size: 14px;
+  padding: 6px 10px;
+}
+.card-links .fake-link {
+  text-decoration: underline;
+  opacity: 0.85;
+}
+a.chat-live,
+a.chat-live * {
+  pointer-events: auto;
+  cursor: pointer;
+}
+/* The site's mobile menu needs JavaScript; on small screens show only the chatbot button. */
+@media (max-width: 760px) {
+  .nav-links { display: flex !important; position: static !important; background: none !important; padding: 0 !important; }
+  .nav-links .fake-link { display: none; }
+}
