@@ -10,6 +10,5 @@ __pycache__/
 .venv/
 venv/
 
-# vector store built locally
-chroma_db/
-*.faiss
+# downloaded models (re-downloaded automatically)
+chatbot/.model_cache/
