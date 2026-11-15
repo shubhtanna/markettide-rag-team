@@ -59,6 +59,8 @@ def main():
         t = time.time()
         res = eng.answer(q, [], hybrid=True, rerank=True, decompose=True)
         c = check(item, res["sources"], res["status"], res.get("answer", ""))
+        if item.get("route") and not res["route"].startswith(item["route"]):
+            c = {**c, "pass": False}          # right answer by the wrong path still counts as a miss
         g = res.get("grounding") or {}
         rows.append({"q": q, "type": item["type"], "A": a["pass"], "B": b["pass"], "C": c["pass"],
                      "route": res["route"], "status": res["status"], "sources": len(res["sources"]),

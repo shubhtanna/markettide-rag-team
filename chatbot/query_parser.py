@@ -62,7 +62,12 @@ COMMON_WORDS = set("""a an and are as at be by for from has have in is it its of
 all any are can get one two new out see top how why who what when which this that best good last next week day
 days today yesterday results result order orders bank india share shares stock stocks company limited ltd group
 news about tell me give show list buy sell hold price data more info filing filings nse bse sme ipo board meeting
-power steel energy capital finance financial services motors auto tech""".split())
+power steel energy capital finance financial services motors auto tech
+value total global first prime future smart great super united national general standard premier modern quality
+golden royal supreme ideal select universal popular active dynamic perfect sterling latest recent details update
+updates announced announcement amount record interim final approval approved plant battery agreement project
+contract received declared issue market money credit rating growth income profit revenue bonus split merger
+mobile digital green solar health care life wealth trust unique alpha star indian bharat hindustan""".split())
 
 
 @dataclass

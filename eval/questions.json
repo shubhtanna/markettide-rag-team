@@ -4,6 +4,7 @@
   {"q": "What did Alembic Pharmaceuticals get USFDA approval for?", "type": "factual", "tickers": ["APLLTD"], "status": "answered", "answer_has": ["Binimetinib"]},
   {"q": "Tell me about the Waaree Energies battery plant", "type": "factual", "tickers": ["WAAREEENER"], "status": "answered"},
   {"q": "What order did Texmaco Rail receive?", "type": "factual", "tickers": ["TEXRAIL"], "status": "answered"},
+  {"q": "What order did Texmaco Rail receive and what is its value?", "type": "factual (common word)", "tickers": ["TEXRAIL"], "route": "lookup", "status": "answered"},
   {"q": "What is Zee Entertainment doing with its buyback?", "type": "factual", "tickers": ["ZEEL"], "status": "answered"},
   {"q": "5paisa acquisition update", "type": "factual", "tickers": ["5PAISA"], "status": "answered"},
   {"q": "KAYNES joint venture", "type": "factual (ticker)", "tickers": ["KAYNES"], "status": "answered"},

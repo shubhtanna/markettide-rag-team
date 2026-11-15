@@ -223,7 +223,15 @@ s += bl(["<b>Scanned PDFs have no text</b> (photos of signed letters): those fil
          "<b>Category labels come from rules</b>, so a few filings are mis-tagged and a strict category filter can miss "
          "them. <i>Mitigation:</i> relaxation step; <i>fix:</i> LLM tagging at ingest time.",
          "<b>Similarity threshold is narrow</b> (on-topic 0.675 and up, off-topic up to 0.632 on our probe set). <i>Mitigation:</i> second "
-         "layer is the LLM's NOT_FOUND rule plus the unknown-name check."])
+         "layer is the LLM's NOT_FOUND rule plus the unknown-name check.",
+         "<b>Errors in the source data</b> (found in live testing): NSE's own headline says Shiv Aum Steels split 1 share "
+         "\"into 68002000 equity shares\". TideBot repeated it faithfully and the number check passed, because the number "
+         "<i>is</i> in the source. Grounding proves an answer matches the source, not that the source is right. "
+         "<i>Fix:</i> sanity rules for known fields (a split ratio is small), or show a warning on outliers.",
+         "<b>Common words mistaken for companies</b> (found and fixed in live testing): \"what is its <i>value</i>?\" "
+         "matched the company Value 360 Communications and was routed as a comparison. <i>Fix applied:</i> common "
+         "English and business words can no longer act as one-word company shortcuts; the question is now in the test "
+         "set and the route is checked."])
 
 s += [Paragraph("11. Run it, deploy it, demo it", H2),
       code("python -m venv .venv && .venv\\Scripts\\activate\npip install -r requirements.txt\n"
