@@ -1,5 +1,6 @@
-"""Step 3: talk to the LLM. Groq first (fast, free), Gemini as backup, and if both
-fail we still answer extractively from the retrieved filings instead of crashing."""
+"""Step 3: talk to the LLM. Whichever keys are set are tried in order
+OpenAI -> Groq -> Gemini; if all fail we still answer extractively from the
+retrieved filings instead of crashing."""
 import json
 import re
 
@@ -13,7 +14,35 @@ class LLMUnavailable(Exception):
 
 
 def available():
-    return bool(config.GROQ_API_KEY or config.GEMINI_API_KEY)
+    return bool(config.OPENAI_API_KEY or config.GROQ_API_KEY or config.GEMINI_API_KEY)
+
+
+def _openai(messages, max_tokens, json_mode):
+    last = None
+    for model in config.OPENAI_MODELS:
+        body = {"model": model, "messages": messages, "temperature": config.TEMPERATURE,
+                "max_completion_tokens": max_tokens}
+        if json_mode:
+            body["response_format"] = {"type": "json_object"}
+        for _ in range(2):
+            try:
+                r = requests.post("https://api.openai.com/v1/chat/completions",
+                                  headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
+                                  json=body, timeout=60)
+            except requests.RequestException as e:
+                last = f"{model}: {e}"
+                break
+            if r.status_code == 200:
+                return r.json()["choices"][0]["message"]["content"], f"openai/{model}"
+            last = f"{model}: HTTP {r.status_code} {r.text[:160]}"
+            # Some newer models only accept the default temperature: retry once without it.
+            if r.status_code == 400 and "temperature" in r.text and "temperature" in body:
+                body.pop("temperature")
+                continue
+            if r.status_code in (401, 429):      # bad key / no quota: other models won't help
+                raise LLMUnavailable(last)
+            break
+    raise LLMUnavailable(last)
 
 
 def _groq(messages, max_tokens, json_mode):
@@ -54,6 +83,11 @@ def _gemini(messages, max_tokens, json_mode):
 
 def chat(messages, max_tokens=900, json_mode=False):
     errors = []
+    if config.OPENAI_API_KEY:
+        try:
+            return _openai(messages, max_tokens, json_mode)
+        except LLMUnavailable as e:
+            errors.append(str(e))
     if config.GROQ_API_KEY:
         try:
             return _groq(messages, max_tokens, json_mode)

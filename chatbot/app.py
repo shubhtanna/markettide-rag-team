@@ -61,8 +61,8 @@ with st.sidebar:
     if llm.available():
         st.success("LLM connected", icon="✅")
     else:
-        st.warning("No LLM key: answers are direct extracts from filings. Add GROQ_API_KEY to enable "
-                   "generated answers.", icon="🔑")
+        st.warning("No LLM key: answers are direct extracts from filings. Add OPENAI_API_KEY "
+                   "(or GROQ_API_KEY / GEMINI_API_KEY) to enable generated answers.", icon="🔑")
     if st.button("Clear chat", use_container_width=True):
         st.session_state.history = []
         st.rerun()

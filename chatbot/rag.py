@@ -352,7 +352,7 @@ class Engine:
             rows = [f"- **{h['filing']['company']}** ({_fmt_date(h['filing']['date'])}, {h['filing']['tag']}): "
                     f"{h['filing']['headline'][:220]} [{i}]" for i, h in enumerate(hits, 1)]
             return head + "\n".join(rows)
-        out = ["Here is what the filings say (no LLM key set, so these are direct extracts):\n"]
+        out = ["Here is what the filings say (direct extracts, because no LLM answer was available):\n"]
         for i, h in enumerate(hits[:4], 1):
             f = h["filing"]
             body = "\n".join(ln for ln in h["text"].split("\n")[1:] if not ln.startswith("Headline:"))

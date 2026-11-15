@@ -42,6 +42,11 @@ RERANK_POOL = 24
 RERANK_ENABLED = os.getenv("TIDEBOT_RERANK", "1") == "1"
 
 # --- LLM --------------------------------------------------------------------
+# Any one key is enough. Order tried: OpenAI -> Groq -> Gemini -> extractive answer.
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+# First model your key can use wins; override with OPENAI_MODELS="model-a,model-b".
+OPENAI_MODELS = [m.strip() for m in os.getenv(
+    "OPENAI_MODELS", "gpt-4.1-mini,gpt-4o-mini").split(",") if m.strip()]
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GROQ_MODELS = [m.strip() for m in os.getenv(

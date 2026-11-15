@@ -100,7 +100,7 @@ s += [Paragraph("2. Architecture", H2),
            "              compare      -> query decomposition -> one retrieval per sub-question\n"
            "              lookup       -> filtered hybrid retrieval (relaxed step by step)\n"
            "         -> retriever.py: filter -> FAISS + BM25 -> RRF -> diversity -> cross-encoder rerank\n"
-           "         -> llm.py: Groq (3 models) -> Gemini -> extractive fallback\n"
+           "         -> llm.py: OpenAI -> Groq -> Gemini -> extractive fallback\n"
            "         -> verify citations + numbers -> app.py (Streamlit: answer, sources, trace)"),
       table([
           ["File", "Job"],
@@ -109,7 +109,7 @@ s += [Paragraph("2. Architecture", H2),
           ["chatbot/query_parser.py", "Finds companies, dates, categories and intent in the question"],
           ["chatbot/retriever.py", "Metadata filtering, FAISS + BM25 hybrid search, RRF, reranking"],
           ["chatbot/rag.py", "Routing, decomposition, prompt, fallbacks, grounding check"],
-          ["chatbot/llm.py", "Groq / Gemini calls with automatic fallback"],
+          ["chatbot/llm.py", "OpenAI / Groq / Gemini calls with automatic fallback"],
           ["chatbot/app.py", "Streamlit UI"],
           ["eval/run_eval.py", "Test set, ablation (A/B/C) and results table"],
       ], [45 * mm, W - 45 * mm])]
@@ -184,7 +184,7 @@ s += bl(["<b>Prompt rules:</b> use only numbered SOURCES; cite every fact as [n]
          "<b>Citation cleanup:</b> any [n] that doesn't exist is removed.",
          "<b>Number verification (faithfulness check):</b> every number in the answer is searched for in the sources; "
          "the UI shows \"5/5 numbers verified\" or lists the ones it could not find.",
-         "<b>Resilience:</b> Groq llama-3.3-70b -> gpt-oss-120b -> llama-3.1-8b -> Gemini -> extractive answer from the "
+         "<b>Resilience:</b> OpenAI (gpt-4.1-mini, gpt-4o-mini) -> Groq -> Gemini -> extractive answer from the "
          "filings. The demo never shows an error screen.",
          "<b>Follow-ups:</b> \"what about their dividend?\" reuses the last company discussed."])
 
@@ -227,12 +227,12 @@ s += bl(["<b>Scanned PDFs have no text</b> (photos of signed letters): those fil
 
 s += [Paragraph("11. Run it, deploy it, demo it", H2),
       code("python -m venv .venv && .venv\\Scripts\\activate\npip install -r requirements.txt\n"
-           "copy .env.example .env      # add GROQ_API_KEY\n"
+           "copy .env.example .env      # add OPENAI_API_KEY\n"
            "streamlit run chatbot/app.py\n"
            "python eval/run_eval.py     # re-run the evaluation"),
       Paragraph("<b>Deploy:</b> Render web service, start command "
                 "<font name='Mono'>streamlit run chatbot/app.py --server.port $PORT --server.address 0.0.0.0</font>, "
-                "secret <font name='Mono'>GROQ_API_KEY</font> set in Render's Environment tab. The index is committed, so "
+                "secret <font name='Mono'>OPENAI_API_KEY</font> set in Render's Environment tab. The index is committed, so "
                 "the server never re-embeds. Memory: ~360 MB steady (limit 512 MB) after replacing rank_bm25 and turning the "
                 "reranker off (TIDEBOT_RERANK=0). Free tier sleeps after 15 min: open it 2 minutes before presenting.", P),
       Paragraph("5-minute demo script", H3)]

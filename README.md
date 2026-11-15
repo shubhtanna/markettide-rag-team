@@ -17,7 +17,7 @@ design decision, why it was made, and the evaluation results.
 | `chatbot/retriever.py` | Metadata filter + FAISS vectors + BM25, fused with RRF, cross-encoder rerank |
 | `chatbot/query_parser.py` | Detects companies, dates, categories and intent in a question |
 | `chatbot/ingest.py` | Data -> chunks -> embeddings -> FAISS index (`chatbot/index/`, committed) |
-| `chatbot/llm.py` | Groq / Gemini with automatic fallback |
+| `chatbot/llm.py` | OpenAI / Groq / Gemini with automatic fallback |
 | `eval/` | Test questions, ablation runner and results (`eval/results.md`) |
 | `data/` | `filings_last_7_days.csv` (raw export) and `filings_enriched.csv` (+ PDF text) |
 | `tools/` | PDF text enrichment, home page builder, explainer PDF builder |
@@ -30,7 +30,7 @@ design decision, why it was made, and the evaluation results.
 python -m venv .venv
 .venv\Scripts\activate          # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-copy .env.example .env          # then put your own free GROQ_API_KEY in .env
+copy .env.example .env          # then put your OPENAI_API_KEY (or Groq / Gemini key) in .env
 streamlit run chatbot/app.py
 ```
 
@@ -53,7 +53,7 @@ during the export. The PDF text covers the first 6 pages of each filing; scanned
 
 ## Secrets
 
-The home page needs **no keys**. The chatbot needs **one free LLM key** (Groq, or Gemini as backup).
+The home page needs **no keys**. The chatbot needs **one LLM key**: OpenAI, Groq or Gemini (set more than one and the next is a backup).
 Locally it goes in `.env` (gitignored, never commit it); on Render it goes in the service's Environment tab.
 
 ## Team workflow
