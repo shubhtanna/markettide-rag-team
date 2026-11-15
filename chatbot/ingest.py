@@ -2,7 +2,8 @@
 
     python chatbot/ingest.py
 
-Writes chatbot/index/: filings.json, chunks.json, vectors.faiss, manifest.json
+Writes chatbot/index/: filings.json, chunks.json, vectors.faiss, bm25.npz, manifest.json
+    python chatbot/ingest.py --bm25-only     # rebuild only the keyword index
 """
 import json
 import re
@@ -15,7 +16,9 @@ import pandas as pd
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
 import config  # noqa: E402
+from bm25 import BM25  # noqa: E402
 from embedder import embed_documents  # noqa: E402
+from retriever import tokenize  # noqa: E402
 
 JUNK_BODY = re.compile(r"^\W*$")
 
@@ -73,7 +76,16 @@ def build_chunks(df):
     return chunks
 
 
+def build_bm25(chunks):
+    BM25([tokenize(c["text"]) for c in chunks]).save(config.INDEX_DIR / "bm25.npz")
+
+
 def main():
+    if "--bm25-only" in sys.argv:          # rebuild keyword index without re-embedding
+        chunks = json.loads((config.INDEX_DIR / "chunks.json").read_text(encoding="utf-8"))
+        build_bm25(chunks)
+        print("bm25.npz written")
+        return
     t = time.time()
     config.INDEX_DIR.mkdir(parents=True, exist_ok=True)
     df = load_filings()
@@ -89,9 +101,10 @@ def main():
     faiss.write_index(index, str(config.INDEX_DIR / "vectors.faiss"))
 
     cols = ["id", "date", "time", "exchange", "company", "ticker", "category", "tag",
-            "importance_score", "headline", "body", "pdf_url", "page_url"]
+            "importance_score", "headline", "pdf_url", "page_url"]  # body lives in chunks.json
     df[cols].to_json(config.INDEX_DIR / "filings.json", orient="records", force_ascii=False)
     (config.INDEX_DIR / "chunks.json").write_text(json.dumps(chunks, ensure_ascii=False), encoding="utf-8")
+    build_bm25(chunks)
     manifest = {
         "filings": len(df), "chunks": len(chunks), "embed_model": config.EMBED_MODEL,
         "dim": int(vecs.shape[1]), "date_from": df["date"].min(), "date_to": df["date"].max(),

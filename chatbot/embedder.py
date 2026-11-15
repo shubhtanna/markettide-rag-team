@@ -17,7 +17,8 @@ def _model():
 
 
 def embed_documents(texts, batch_size=64):
-    return np.array(list(_model().embed(texts, batch_size=batch_size)), dtype="float32")
+    par = None  # fastembed's multi-process mode ran out of memory here; single process is slower but reliable
+    return np.array(list(_model().embed(texts, batch_size=batch_size, parallel=par)), dtype="float32")
 
 
 def embed_query(text):

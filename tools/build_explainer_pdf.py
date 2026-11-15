@@ -81,10 +81,10 @@ s += [Paragraph("1. The one-minute version", H2),
                 f"added to the data ({man['with_pdf_text']:,} filings have PDF text), then split into "
                 f"<b>{man['chunks']:,} chunks</b>. A question goes through <b>query understanding</b> "
                 "(company, date, category, intent), then a <b>route</b>, <b>hybrid retrieval</b> (FAISS vectors + BM25, "
-                "fused with RRF, re-ranked by a cross-encoder), a grounded <b>LLM answer with citations</b>, and an "
+                "fused with RRF, optional cross-encoder rerank), a grounded <b>LLM answer with citations</b>, and an "
                 "automatic <b>number check</b> against the sources.", P),
       Paragraph(f"<b>Result on our {N}-question test set:</b> plain vector RAG passes {pct(S['baseline_vector_only'])}, "
-                f"hybrid + rerank alone {pct(S['hybrid_rerank'])}, the full TideBot {pct(S['tidebot_full'])}. "
+                f"hybrid search alone {pct(S['hybrid_rerank'])}, the full TideBot {pct(S['tidebot_full'])}. "
                 "The gain comes from understanding the question <i>before</i> searching.", NOTE)]
 
 s += [Paragraph("2. Architecture", H2),
@@ -142,7 +142,7 @@ s += [Paragraph("4. Chunking, embeddings and vector store", H2),
           ["Vector store", "FAISS IndexFlatIP on normalised vectors (= cosine), metadata filter via IDSelector",
            "Exact search is instant at this size; filtering inside FAISS means \"only Ashok Leyland\" is enforced, "
            "not hoped for."],
-          ["Keyword index", "BM25 (rank_bm25) over the same chunks", "Exact tickers, names, numbers and jargon (QIP, NCLT)."],
+          ["Keyword index", "BM25 (Okapi, k1=1.5, b=0.75) written by us on numpy postings, built at ingest and saved", "Exact tickers, names, numbers and jargon (QIP, NCLT). Our version gives the same scores as the rank_bm25 library but uses ~10 MB instead of ~120 MB."],
       ], [26 * mm, 62 * mm, W - 88 * mm])]
 
 s += [Paragraph("5. The big idea: understand the question before searching", H2),
@@ -174,7 +174,8 @@ s += bl(["<b>Filter</b> by company / date / category (hard constraints).",
          "and BM25 (0-30) never need to be on the same scale.",
          f"<b>Diversity:</b> max {config.MAX_CHUNKS_PER_DOC} chunks per filing, so one long PDF can't take all slots.",
          f"<b>Cross-encoder rerank</b> ({config.RERANK_MODEL}) of the top {config.RERANK_POOL}: reads question and chunk "
-         f"together, far more accurate than vector distance; keep top {config.TOP_K}.",
+         f"together; keep top {config.TOP_K}. On by default locally, <b>off on the free server</b>: it costs extra memory, and "
+         "the evaluation passed every question with or without it (it changed the top-3 for only 3 questions).",
          "<b>Relaxation:</b> if a category or date filter returns nothing, drop it, say so in the trace, and retry."])
 
 s += [Paragraph("7. Generation and grounding", H2)]
@@ -202,14 +203,15 @@ s += [Paragraph("9. Evaluation", H2),
       Paragraph(f"{N} questions covering factual lookups, tickers, typos, lists, dates, comparisons, multi-part, advice, "
                 "live prices, out-of-window, off-topic and companies that aren't in the data. A pass needs the right "
                 "filings retrieved (company / category / date) <i>and</i> the right behaviour (answer vs. refuse). "
-                "<b>A</b> = plain vector RAG, <b>B</b> = hybrid + rerank only, <b>C</b> = full TideBot.", P),
+                "<b>A</b> = plain vector RAG, <b>B</b> = hybrid search only, <b>C</b> = full TideBot. Run in the deployed configuration "
+                "(reranker off).", P),
       table([["System", "Passed"], ["A. Baseline vector RAG", pct(S["baseline_vector_only"])],
-             ["B. + Hybrid BM25 + RRF + rerank", pct(S["hybrid_rerank"])],
+             ["B. + Hybrid BM25 + RRF (no query understanding)", pct(S["hybrid_rerank"])],
              ["C. TideBot (query understanding + routing + fallbacks)", pct(S["tidebot_full"])],
              ["Numbers in answers found in sources", S["numbers_verified"]],
              ["Average response time (full system)", f"{S['avg_latency_s']} s"]], [110 * mm, W - 110 * mm]),
       Spacer(1, 5),
-      table(rows, [8 * mm, 30 * mm, W - 68 * mm, 10 * mm, 10 * mm, 10 * mm])]
+      table(rows, [8 * mm, 30 * mm, W - 80 * mm, 14 * mm, 14 * mm, 14 * mm])]
 
 s += [Paragraph("10. Failure cases and how we'd fix them", H2)]
 s += bl(["<b>Scanned PDFs have no text</b> (photos of signed letters): those filings only have a headline, so detailed "
@@ -220,7 +222,7 @@ s += bl(["<b>Scanned PDFs have no text</b> (photos of signed letters): those fil
          "downgrade) unless the PDF text was readable. <i>Fix:</i> extract structured fields (rating agency, old/new rating).",
          "<b>Category labels come from rules</b>, so a few filings are mis-tagged and a strict category filter can miss "
          "them. <i>Mitigation:</i> relaxation step; <i>fix:</i> LLM tagging at ingest time.",
-         "<b>Similarity threshold is narrow</b> (on-topic about 0.63+, off-topic up to about 0.62). <i>Mitigation:</i> second "
+         "<b>Similarity threshold is narrow</b> (on-topic 0.675 and up, off-topic up to 0.632 on our probe set). <i>Mitigation:</i> second "
          "layer is the LLM's NOT_FOUND rule plus the unknown-name check."])
 
 s += [Paragraph("11. Run it, deploy it, demo it", H2),
@@ -231,7 +233,8 @@ s += [Paragraph("11. Run it, deploy it, demo it", H2),
       Paragraph("<b>Deploy:</b> Render web service, start command "
                 "<font name='Mono'>streamlit run chatbot/app.py --server.port $PORT --server.address 0.0.0.0</font>, "
                 "secret <font name='Mono'>GROQ_API_KEY</font> set in Render's Environment tab. The index is committed, so "
-                "the server never re-embeds. Free tier sleeps after 15 min: open it 2 minutes before presenting.", P),
+                "the server never re-embeds. Memory: ~360 MB steady (limit 512 MB) after replacing rank_bm25 and turning the "
+                "reranker off (TIDEBOT_RERANK=0). Free tier sleeps after 15 min: open it 2 minutes before presenting.", P),
       Paragraph("5-minute demo script", H3)]
 s += bl(["<b>0:00 Problem (45 s):</b> thousands of filings a week; ChatGPT can't know this week's filings; we built "
          "TideBot on real NSE data.",

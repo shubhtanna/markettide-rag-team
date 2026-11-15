@@ -50,6 +50,20 @@ EXAMPLES = [
 ]
 
 
+BOILERPLATE = re.compile(
+    r"yours (faithfully|truly|sincerely)|thanking you|dear sir|for and on behalf|company secretary|"
+    r"compliance officer|\bdin\b|membership no|\bsub(ject)?\s*:|\bref\s*:|scrip code|symbol\s*:|"
+    r"listing (department|compliance)|phiroze|bandra.kurla|dalal street|kindly take|"
+    r"take (the )?(above|same) on (your )?record|pursuant to regulation|whether the|if yes|nature of interest",
+    re.I)
+MONEY = re.compile(r"(rs\.?|inr|₹|\bcrore|\bcr\b|lakh|million|mn\b|billion|%|per (equity )?share)", re.I)
+
+
+def _sentence_score(sentence, qtokens):
+    toks = set(tokenize(sentence))
+    return 2 * len(qtokens & toks) + (2 if MONEY.search(sentence) else 0) + (1 if re.search(r"\d", sentence) else 0)
+
+
 def _fmt_date(d):
     import datetime as dt
     return dt.date.fromisoformat(d).strftime("%d %b")
@@ -342,9 +356,10 @@ class Engine:
         for i, h in enumerate(hits[:4], 1):
             f = h["filing"]
             body = "\n".join(ln for ln in h["text"].split("\n")[1:] if not ln.startswith("Headline:"))
-            sents = re.split(r"(?<=[.;])\s+|\n", body)
-            best = sorted(sents, key=lambda s_: -len(q & set(tokenize(s_))))[:2]
-            snippet = " ".join(x.strip() for x in best if x.strip())[:400]
+            sents = [x.strip() for x in re.split(r"(?<=[.;])\s+|\n", body) if len(x.strip()) > 25]
+            sents = [x for x in sents if not BOILERPLATE.search(x)]
+            ranked = sorted(range(len(sents)), key=lambda j: -_sentence_score(sents[j], q))[:2]
+            snippet = " ".join(sents[j] for j in sorted(ranked))[:420]
             out.append(f"- **{f['company']}**, {_fmt_date(f['date'])} ({f['tag']}): {f['headline'][:200]}"
                        + (f"\n  > {snippet}" if snippet and snippet not in f["headline"] else "") + f" [{i}]")
         return "\n".join(out)

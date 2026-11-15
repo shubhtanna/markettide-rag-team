@@ -5,9 +5,9 @@ import re
 
 import faiss
 import numpy as np
-from rank_bm25 import BM25Okapi
 
 import config
+from bm25 import BM25
 from embedder import embed_query, rerank_scores
 from query_parser import CompanyIndex
 
@@ -25,7 +25,9 @@ class Store:
         self.chunks = json.loads((index_dir / "chunks.json").read_text(encoding="utf-8"))
         self.manifest = json.loads((index_dir / "manifest.json").read_text(encoding="utf-8"))
         self.index = faiss.read_index(str(index_dir / "vectors.faiss"))
-        self.bm25 = BM25Okapi([tokenize(c["text"]) for c in self.chunks])
+        bm25_file = index_dir / "bm25.npz"
+        self.bm25 = (BM25.load(bm25_file) if bm25_file.exists()
+                     else BM25([tokenize(c["text"]) for c in self.chunks]))
         self.companies = CompanyIndex(self.filings)
         self.anchor = dt.date.fromisoformat(self.manifest["date_to"])
         self.first = dt.date.fromisoformat(self.manifest["date_from"])
@@ -123,7 +125,7 @@ class Store:
             if len(pool) >= config.RERANK_POOL:
                 break
 
-        if rerank and len(pool) > 1:
+        if rerank and config.RERANK_ENABLED and len(pool) > 1:
             try:
                 rs = rerank_scores(query, [self.chunks[c]["text"] for c in pool])
                 for c, s in zip(pool, rs):

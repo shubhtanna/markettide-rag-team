@@ -1,0 +1,38 @@
+# Evaluation results
+
+- Questions: **27**  ·  LLM connected: **False**  ·  Reranker: **False**
+- A. Baseline (vector only): **12/27**
+- B. Hybrid search (no query understanding): **13/27**
+- C. TideBot full system: **27/27**
+- Numbers in answers found in sources: **n/a**
+- Average latency (full system): **0.04s**
+
+| # | Type | Question | A | B | C | Route | Status |
+|---|---|---|---|---|---|---|---|
+| 1 | factual | What did Ashok Leyland announce this week? | ✅ | ✅ | ✅ | lookup | answered |
+| 2 | factual | How much interim dividend did Ashok Leyland declare? | ❌ | ❌ | ✅ | lookup | answered |
+| 3 | factual | What did Alembic Pharmaceuticals get USFDA approval for? | ✅ | ✅ | ✅ | lookup | answered |
+| 4 | factual | Tell me about the Waaree Energies battery plant | ✅ | ✅ | ✅ | lookup | answered |
+| 5 | factual | What order did Texmaco Rail receive? | ✅ | ✅ | ✅ | lookup | answered |
+| 6 | factual | What is Zee Entertainment doing with its buyback? | ✅ | ✅ | ✅ | lookup | answered |
+| 7 | factual | 5paisa acquisition update | ✅ | ✅ | ✅ | lookup | answered |
+| 8 | factual (ticker) | KAYNES joint venture | ✅ | ✅ | ✅ | lookup | answered |
+| 9 | factual (typo) | What did Kaynes Technolgy announce? | ✅ | ✅ | ✅ | lookup | answered |
+| 10 | list | Which companies declared a dividend this week? | ❌ | ❌ | ✅ | list (metadata filter) | answered |
+| 11 | list | List all buyback announcements | ❌ | ❌ | ✅ | list (metadata filter) | answered |
+| 12 | list | Which companies announced a stock split? | ❌ | ❌ | ✅ | list (metadata filter) | answered |
+| 13 | list | Which companies received new orders or contracts? | ❌ | ❌ | ✅ | list (metadata filter) | answered |
+| 14 | list | Any open offers filed this week? | ✅ | ✅ | ✅ | lookup | answered |
+| 15 | top | What were the most important filings yesterday? | ❌ | ❌ | ✅ | top (ranked by importance score) | answered |
+| 16 | list + date | Which companies had credit rating updates on 14 Nov? | ❌ | ❌ | ✅ | list (metadata filter) | answered |
+| 17 | compare | Compare the announcements of Dhampur Bio Organics and Zee Entertainment | ✅ | ✅ | ✅ | compare (query decomposition) | answered |
+| 18 | compare | Compare Alembic Pharmaceuticals and Wanbury approvals | ✅ | ✅ | ✅ | compare (query decomposition) | answered |
+| 19 | multi-part | Did Dhampur Bio Organics announce both results and a buyback? | ✅ | ✅ | ✅ | lookup | answered |
+| 20 | multi-part | Which companies started new plants or added capacity, and what capacity? | ❌ | ✅ | ✅ | list (metadata filter) | answered |
+| 21 | advice | Should I buy Reliance shares now? | ❌ | ❌ | ✅ | advice | refused |
+| 22 | advice | What is the target price for Waaree Energies? | ❌ | ❌ | ✅ | advice | refused |
+| 23 | unsupported (live data) | What is the current share price of Ashok Leyland? | ❌ | ❌ | ✅ | live_price | refused |
+| 24 | out of window | What were Infosys results in 2021? | ❌ | ❌ | ✅ | out_of_window | out_of_window |
+| 25 | out of domain | Who won the cricket world cup? | ❌ | ❌ | ✅ | lookup | not_found |
+| 26 | out of domain | How do I bake a chocolate cake? | ❌ | ❌ | ✅ | lookup | not_found |
+| 27 | not in data | What did Tesla announce this week? | ❌ | ❌ | ✅ | lookup | not_found |

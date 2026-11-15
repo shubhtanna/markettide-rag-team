@@ -33,11 +33,13 @@ RRF_K = 60                 # standard Reciprocal Rank Fusion constant
 TOP_K = 8                  # chunks sent to the LLM
 MAX_CHUNKS_PER_DOC = 2     # diversity: stop one long filing filling every slot
 LIST_LIMIT = 30            # filings shown for "which companies..." questions
-MIN_DENSE_SCORE = 0.63     # calibrated: on-topic questions >= 0.63, off-topic <= 0.625 (see eval)
+MIN_DENSE_SCORE = 0.65     # calibrated on 20 probes: on-topic >= 0.675, off-topic <= 0.632
 
 # --- Reranker (cross-encoder) ----------------------------------------------
 RERANK_MODEL = "Xenova/ms-marco-MiniLM-L-6-v2"
 RERANK_POOL = 24
+# Off on the free 512 MB server (saves ~85 MB); eval showed 27/27 with or without it.
+RERANK_ENABLED = os.getenv("TIDEBOT_RERANK", "1") == "1"
 
 # --- LLM --------------------------------------------------------------------
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()

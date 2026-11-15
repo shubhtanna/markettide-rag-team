@@ -35,7 +35,7 @@ st.markdown("""
 @st.cache_resource(show_spinner="Loading 7 days of filings and the search index...")
 def get_engine():
     eng = Engine()
-    warm_up(rerank=True)
+    warm_up(rerank=config.RERANK_ENABLED)
     return eng
 
 
@@ -51,8 +51,9 @@ with st.sidebar:
     st.markdown("**Retrieval settings**")
     hybrid = st.toggle("Hybrid search (vectors + BM25)", value=True,
                        help="Off = vector search only. Turn it off to see why exact names need keyword search.")
-    rerank = st.toggle("Cross-encoder reranking", value=True,
-                       help="Re-scores the top 24 chunks by reading question and chunk together.")
+    rerank = st.toggle("Cross-encoder reranking", value=config.RERANK_ENABLED, disabled=not config.RERANK_ENABLED,
+                       help="Re-scores the top 24 chunks by reading question and chunk together."
+                       + ("" if config.RERANK_ENABLED else " Turned off on the free server to save memory."))
     decompose = st.toggle("Query decomposition", value=True,
                           help="Splits comparison / multi-part questions into sub-questions.")
     show_trace = st.toggle("Show retrieval trace", value=True)

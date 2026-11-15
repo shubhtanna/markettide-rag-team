@@ -5,5 +5,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from embedder import warm_up  # noqa: E402
 
-warm_up(rerank=True)
+import config  # noqa: E402
+
+warm_up(rerank=config.RERANK_ENABLED)
 print("models ready")

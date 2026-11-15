@@ -4,7 +4,7 @@
 
 Three systems are compared on the same questions:
   A. Baseline RAG   - plain vector search, top-8, no query understanding, never refuses
-  B. + Hybrid       - vectors + BM25 fused with RRF, + cross-encoder rerank (still no filters)
+  B. + Hybrid       - vectors + BM25 fused with RRF (+ cross-encoder rerank if TIDEBOT_RERANK=1), no filters
   C. TideBot (full) - query understanding, metadata filters, routing, decomposition, fallbacks
 """
 import json
@@ -14,6 +14,7 @@ import time
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "chatbot"))
+import config  # noqa: E402
 import llm  # noqa: E402
 from rag import Engine  # noqa: E402
 
@@ -71,13 +72,13 @@ def main():
     nums_ok = sum(r["grounding"]["found"] for r in ans)
     summary = {
         "questions": n, "baseline_vector_only": score["A"], "hybrid_rerank": score["B"], "tidebot_full": score["C"],
-        "llm": llm.available(), "numbers_verified": f"{nums_ok}/{nums_total}" if nums_total else "n/a",
+        "llm": llm.available(), "reranker": config.RERANK_ENABLED, "numbers_verified": f"{nums_ok}/{nums_total}" if nums_total else "n/a",
         "avg_latency_s": round(sum(r["latency"] for r in rows) / n, 2),
     }
     out = ["# Evaluation results", "",
-           f"- Questions: **{n}**  ·  LLM connected: **{summary['llm']}**",
+           f"- Questions: **{n}**  ·  LLM connected: **{summary['llm']}**  ·  Reranker: **{config.RERANK_ENABLED}**",
            f"- A. Baseline (vector only): **{score['A']}/{n}**",
-           f"- B. Hybrid + rerank (no query understanding): **{score['B']}/{n}**",
+           f"- B. Hybrid search (no query understanding): **{score['B']}/{n}**",
            f"- C. TideBot full system: **{score['C']}/{n}**",
            f"- Numbers in answers found in sources: **{summary['numbers_verified']}**",
            f"- Average latency (full system): **{summary['avg_latency_s']}s**", "",

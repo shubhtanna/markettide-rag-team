@@ -1,0 +1,11 @@
+{
+  "filings": 2766,
+  "chunks": 10337,
+  "embed_model": "BAAI/bge-small-en-v1.5",
+  "dim": 384,
+  "date_from": "2026-11-09",
+  "date_to": "2026-11-15",
+  "chunk_words": 180,
+  "chunk_overlap": 40,
+  "with_pdf_text": 2298
+}
