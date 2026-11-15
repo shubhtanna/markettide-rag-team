@@ -40,6 +40,10 @@ WEEK_WORDS = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday"
               "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec", "november", "october", "december",
               "usfda", "fda", "nse", "bse", "sebi", "nclt", "ceo", "cfo", "qip", "ipo"}
 
+QUESTION_WORDS = {"what", "which", "who", "whom", "how", "when", "where", "why", "did", "does", "do", "is", "are",
+                  "was", "were", "any", "show", "list", "tell", "give", "compare", "find", "get", "can", "could",
+                  "should", "would", "will", "has", "have", "please", "summarise", "summarize", "explain", "hi", "hello"}
+
 EXAMPLES = [
     "What did Ashok Leyland announce this week?",
     "Which companies declared a dividend this week?",
@@ -228,13 +232,20 @@ class Engine:
                 if note:
                     res["notes"].append(note)
                 break
+        if p.missing_companies and not p.companies:
+            names = " / ".join(p.missing_companies)
+            res["status"] = "not_found"
+            res["answer"] = (f"**{names}** has no filings in my data for {self.coverage}, so I can't answer about it. "
+                             "Either it filed nothing on NSE this week, or its filings were routine paperwork that "
+                             "Market Tide filters out.")
+            return
         unknown = self._unknown_names(p)
         if unknown and not p.companies:
             res["status"] = "not_found"
             res["answer"] = (f"I have no filings that mention **{', '.join(unknown)}** in {self.coverage}. "
                              "It may not be listed on NSE, or it filed nothing this week.")
             return
-        if not p.companies and not p.tags and not p.date_from:
+        if not p.companies and not p.tags:
             best = s.best_dense(p.text)
             res["best_similarity"] = round(best, 3)
             if best < config.MIN_DENSE_SCORE:
@@ -261,7 +272,7 @@ class Engine:
         out = []
         for w in words:
             lw = w.lower()
-            if w == first or lw in COMMON_WORDS or lw in vocab or lw in WEEK_WORDS:
+            if (w == first and lw in QUESTION_WORDS) or lw in COMMON_WORDS or lw in vocab or lw in WEEK_WORDS:
                 continue
             out.append(w)
         return out

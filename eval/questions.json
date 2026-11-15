@@ -26,5 +26,9 @@
   {"q": "What were Infosys results in 2021?", "type": "out of window", "status": "out_of_window"},
   {"q": "Who won the cricket world cup?", "type": "out of domain", "status": "not_found"},
   {"q": "How do I bake a chocolate cake?", "type": "out of domain", "status": "not_found"},
-  {"q": "What did Tesla announce this week?", "type": "not in data", "status": "not_found"}
+  {"q": "What did Tesla announce this week?", "type": "not in data", "status": "not_found"},
+  {"q": "any zomato eaternal filings are there ??", "type": "brand not in data (typo)", "status": "not_found"},
+  {"q": "Any Paytm news this week?", "type": "brand not in data", "status": "not_found"},
+  {"q": "What did TCS announce this week?", "type": "brand alias", "tickers": ["TCS"], "status": "answered"},
+  {"q": "Who is Virat Kohli?", "type": "out of domain", "status": "not_found"}
 ]

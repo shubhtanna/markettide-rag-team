@@ -1,11 +1,11 @@
 # Evaluation results
 
-- Questions: **28**  ·  LLM connected: **False**  ·  Reranker: **False**
-- A. Baseline (vector only): **13/28**
-- B. Hybrid search (no query understanding): **14/28**
-- C. TideBot full system: **28/28**
+- Questions: **32**  ·  LLM connected: **False**  ·  Reranker: **False**
+- A. Baseline (vector only): **14/32**
+- B. Hybrid search (no query understanding): **15/32**
+- C. TideBot full system: **32/32**
 - Numbers in answers found in sources: **n/a**
-- Average latency (full system): **0.08s**
+- Average latency (full system): **0.1s**
 
 | # | Type | Question | A | B | C | Route | Status |
 |---|---|---|---|---|---|---|---|
@@ -37,3 +37,7 @@
 | 26 | out of domain | Who won the cricket world cup? | ❌ | ❌ | ✅ | lookup | not_found |
 | 27 | out of domain | How do I bake a chocolate cake? | ❌ | ❌ | ✅ | lookup | not_found |
 | 28 | not in data | What did Tesla announce this week? | ❌ | ❌ | ✅ | lookup | not_found |
+| 29 | brand not in data (typo) | any zomato eaternal filings are there ?? | ❌ | ❌ | ✅ | lookup | not_found |
+| 30 | brand not in data | Any Paytm news this week? | ❌ | ❌ | ✅ | lookup | not_found |
+| 31 | brand alias | What did TCS announce this week? | ✅ | ✅ | ✅ | lookup | answered |
+| 32 | out of domain | Who is Virat Kohli? | ❌ | ❌ | ✅ | lookup | not_found |

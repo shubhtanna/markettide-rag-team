@@ -67,7 +67,9 @@ value total global first prime future smart great super united national general 
 golden royal supreme ideal select universal popular active dynamic perfect sterling latest recent details update
 updates announced announcement amount record interim final approval approved plant battery agreement project
 contract received declared issue market money credit rating growth income profit revenue bonus split merger
-mobile digital green solar health care life wealth trust unique alpha star indian bharat hindustan""".split())
+mobile digital green solar health care life wealth trust unique alpha star indian bharat hindustan
+commercial international industrial consumer network logistics chemicals engineering pharma foods textiles media
+home external internal borrowing housing realty infra projects systems solutions ventures holdings""".split())
 
 
 @dataclass
@@ -81,6 +83,26 @@ class ParsedQuery:
     tags: list = field(default_factory=list)
     intent: str = "lookup"     # lookup | list | top | compare | advice | live_price | greeting | help
     notes: list = field(default_factory=list)
+    missing_companies: list = field(default_factory=list)   # known companies with no filings this week
+
+
+# Real words that are one letter away from a brand ("external" vs "eternal").
+NOT_BRAND_TYPOS = {"external", "internal", "eternity", "matrix", "witness", "airtime", "kotaks"}
+
+# Popular names people actually type -> official listed name. Lets "zomato" or "TCS" work, and lets
+# us say "Eternal (Zomato) filed nothing this week" instead of returning an unrelated filing.
+BRANDS = {
+    "zomato": "Eternal Limited", "eternal": "Eternal Limited", "blinkit": "Eternal Limited",
+    "paytm": "One 97 Communications Limited", "nykaa": "FSN E-Commerce Ventures Limited",
+    "policybazaar": "PB Fintech Limited", "dmart": "Avenue Supermarts Limited", "d mart": "Avenue Supermarts Limited",
+    "lic": "Life Insurance Corporation of India", "sbi": "State Bank of India", "hul": "Hindustan Unilever Limited",
+    "l and t": "Larsen & Toubro Limited", "lnt": "Larsen & Toubro Limited", "m and m": "Mahindra & Mahindra Limited",
+    "airtel": "Bharti Airtel Limited", "tcs": "Tata Consultancy Services Limited", "ril": "Reliance Industries Limited",
+    "infosys": "Infosys Limited", "icici": "ICICI Bank Limited", "itc": "ITC Limited", "wipro": "Wipro Limited",
+    "hcl": "HCL Technologies Limited", "maruti": "Maruti Suzuki India Limited", "ola electric": "Ola Electric Mobility Limited",
+    "jio financial": "Jio Financial Services Limited", "irctc": "Indian Railway Catering And Tourism Corporation Limited",
+    "hdfc bank": "HDFC Bank Limited", "kotak": "Kotak Mahindra Bank Limited", "bajaj auto": "Bajaj Auto Limited",
+}
 
 
 def _norm(s):
@@ -124,6 +146,26 @@ class CompanyIndex:
             if t and len(t) >= 3 and t.lower() not in COMMON_WORDS:
                 self.tickers[t.upper()] = (c, t)
         self.aliases = sorted(self.by_alias, key=len, reverse=True)
+
+    def brands(self, text):
+        """Popular names (exact, or a close typo like "eaternal") -> (found keys, missing official names)."""
+        q = " " + _norm(text) + " "
+        words = q.split()
+        found, missing = [], []
+        for brand, official in BRANDS.items():
+            hit = f" {brand} " in q or (len(brand) >= 6 and " " not in brand and any(
+                w[0] == brand[0] and w not in NOT_BRAND_TYPOS and fuzz.ratio(w, brand) >= 85
+                for w in words if len(w) >= 5))
+            if not hit:
+                continue
+            key = self.by_alias.get(_norm(official))
+            if key and key not in found:
+                found.append(key)
+            else:
+                label = official if brand.split()[0] in _norm(official) else f"{official} ({brand.title()})"
+                if not key and not any(m.startswith(official) for m in missing):
+                    missing.append(label)
+        return found, missing
 
     def find(self, text):
         found, taken = [], []
@@ -229,8 +271,11 @@ def parse(text, companies: CompanyIndex, anchor: dt.date, first: dt.date) -> Par
         p.intent = "help"
         return p
     p.date_from, p.date_to, p.date_label, p.out_of_window = parse_dates(text, anchor, first)
-    p.companies = companies.find(text)
+    brand_found, p.missing_companies = companies.brands(text)
+    p.companies = brand_found + [c for c in companies.find(text) if c not in brand_found]
     p.tags = detect_tags(text)
+    if p.missing_companies and not p.companies:
+        return p        # a named company with no filings: answer that directly, don't route further
     if ADVICE.search(text):
         p.intent = "advice"
     elif LIVE_PRICE.search(text) and not p.tags:
