@@ -49,7 +49,7 @@ def card(s):
 
 
 cards = "".join(card(s) for s in samples)
-CHAT = "chatbot.html"
+CHAT = "https://tidebot.onrender.com"
 
 page = f"""<!doctype html>
 <html lang="en">
