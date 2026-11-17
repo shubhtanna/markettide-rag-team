@@ -646,6 +646,29 @@ def render_process(steps: list, total_ms: float) -> str:
     html_out.append('</ol>')
     return "".join(html_out)
 
+def scroll_to_latest_question() -> None:
+    """Streamlit doesn't scroll to new chat output by itself. Scroll the page so the latest question sits at the top
+    of the view and its answer is directly below it. Runs in a zero-height component; retries briefly while Streamlit
+    finishes laying the page out."""
+    import streamlit.components.v1 as components
+    components.html(
+        f"""<script>
+        (function () {{
+          const doc = window.parent.document;
+          let tries = 0;
+          const go = () => {{
+            const marks = doc.querySelectorAll('.mt-q-anchor');
+            if (!marks.length) return;
+            const msg = marks[marks.length - 1].closest('[data-testid="stChatMessage"]') || marks[marks.length - 1];
+            msg.scrollIntoView({{ behavior: tries ? 'auto' : 'smooth', block: 'start' }});
+          }};
+          const t = setInterval(() => {{ go(); if (++tries >= 6) clearInterval(t); }}, 200);
+        }})();
+        </script><!-- {time.time()} -->""",
+        height=0,
+    )
+
+
 def status_pill_html(tool_context: str, is_refusal: bool, status: str) -> str:
     """Status shown above every answer, driven by what the pipeline actually did."""
     ctx = tool_context or ""
@@ -943,7 +966,9 @@ with tab_ask:
     if active_query:
         st.session_state.messages.append({"role": "user", "content": active_query})
         with st.chat_message("user", avatar="🧑‍💼"):
+            st.html('<span class="mt-q-anchor"></span>')
             st.markdown(active_query)
+        scroll_to_latest_question()          # bring the new question (and the live progress under it) into view
 
         with st.chat_message("assistant", avatar="📈"):
             t_start = time.time()
@@ -1061,6 +1086,7 @@ with tab_ask:
                 "steps": steps,
                 "ms": total_ms
             })
+        scroll_to_latest_question()          # results are in: show the question with its answer right below it
 
 # ----------------- TAB 2: 🔍 HOW IT WORKS -----------------
 with tab_how:
