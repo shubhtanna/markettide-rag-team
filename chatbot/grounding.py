@@ -24,17 +24,26 @@ import time
 from dataclasses import dataclass, field
 
 import pandas as pd
+import requests
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENRICHED_CSV = os.path.join(BASE_DIR, "data", "filings_enriched.csv")
+try:                                   # keys live only in .env (git-ignored) or the host's secret settings
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(BASE_DIR, ".env"))
+except Exception:
+    pass
 
 MAX_EVIDENCE = 8
 EXCERPT_CHARS = 900
-MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
+# Model order: OpenAI first when OPENAI_API_KEY is set (follows the citation rules most reliably), then Groq.
+# Override the OpenAI models with OPENAI_MODELS="model-a,model-b" in .env.
+DEFAULT_OPENAI_MODELS = "gpt-4.1-mini,gpt-4o-mini"
+MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]     # Groq backup chain
+OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 
 REFUSAL = "I don't know. That is not present in the 7-day NSE filings database (Nov 9–15, 2026)."
-INSUFFICIENT_DETAIL = ("The filings I found for this question don't actually state the answer, so I won't guess. "
-                       "Open the source filings below to check them yourself.")
+INSUFFICIENT_DETAIL = "The filings I found for this question don't actually state the answer, so I won't guess."
 
 SYSTEM = """You are Market Tide Mentor, an assistant that answers questions about Indian stock-exchange filings.
 Your only knowledge is the numbered evidence passages: official NSE corporate filings published 9-15 Nov 2026.
@@ -47,17 +56,24 @@ Rules:
   calculate totals, round, estimate or compare magnitudes the passages do not compare.
 - Do not interpret or predict: no "bullish", "bearish", "positive/negative for investors", price impact or advice.
 - If the evidence does not contain the answer, reply exactly: INSUFFICIENT_CONTEXT
-- If only part of the question is covered, answer that part and say plainly which part the filings do not cover.
-- Be concise: a one-line answer, then short bullet points. Start directly with the answer; do not repeat the
-  passage headers or source lines. Do not use tables."""
+- If only part of the question is covered, answer that part and say plainly which part these passages do not
+  cover. The passages are excerpts, so say "the passages do not state X", never "the company/filing did not say X".
+- Negations matter: if a passage says something will NOT happen or is NOT the case, keep the "not"/"no".
+- Keep the exact wording for status and conditions ("upon receipt of", "subject to", "approved", "proposed",
+  "completed"): never change whether something has already happened or is still pending.
+- Be concise: a one-line answer, then short bullet points if needed. EVERY line that states a fact, including
+  the first answer line, must end with its citation, e.g. "Texmaco received an order worth 362.85 crores [1]."
+  Start directly with the answer; do not repeat the passage headers or source lines. Do not use tables."""
 
 REPAIR = """Your draft answer failed an automatic fact check against the evidence. Problems found:
 {problems}
 
-Rewrite the answer so that every sentence is supported by the passages it cites. Fix or remove each problem
-sentence. Do not add any new fact, number or citation that is not already in the draft. Keep the same rules:
-cite every factual sentence as [n], copy numbers exactly, no outside knowledge. If nothing supported remains,
-reply exactly: INSUFFICIENT_CONTEXT
+Rewrite the answer and fix EVERY problem sentence listed above:
+- If a passage states that sentence, end the sentence with that passage's number, e.g. [1].
+- If a number or name in it is not in the passage it cites, correct it from that passage or delete the sentence.
+- If no passage supports it, delete the sentence.
+Do not add any fact or number that is not in the passages. Keep all other sentences as they are. Copy numbers
+exactly, no outside knowledge. If nothing supported remains, reply exactly: INSUFFICIENT_CONTEXT
 
 Draft answer:
 {draft}"""
@@ -113,23 +129,97 @@ def _clean_val(v) -> str:
 
 
 def _tokens(text: str) -> set:
-    return {t for t in re.findall(r"[a-z0-9]+", text.lower()) if len(t) > 2}
+    """Lower-case word set with light normalisation so "buybacks", "buy-back" and "buy back" all match."""
+    t = re.sub(r"\bbuy[\s-]+back", "buyback", text.lower())
+    out = set()
+    for w in re.findall(r"[a-z0-9]+", t):
+        if len(w) <= 2:
+            continue
+        if len(w) > 4 and w.endswith("s") and not w.endswith("ss"):
+            w = w[:-1]                                   # plural -> singular
+        out.add(w)
+    return out
 
 
-BOILER = re.compile(r"yours (faithfully|truly|sincerely)|thanking you|dear sir|company secretary|compliance officer|"
-                    r"\bdin\b|membership no|scrip code|listing (department|compliance)|dalal street|bandra.kurla|"
+# Only letter openings/closings, exchange addresses and "take on record" lines. (Words like "Company Secretary" or
+# "DIN" are NOT here: a sentence such as "Mr X (DIN: 123) appointed as Company Secretary" is a fact people ask about.)
+BOILER = re.compile(r"yours (faithfully|truly|sincerely)|thanking you|dear sir|membership no|scrip code|"
+                    r"listing (department|compliance)|dalal street|bandra.kurla|"
                     r"take (the )?(above|same) on (your )?record|kindly take", re.I)
 
 
-def _excerpt(body: str, query: str, limit: int = EXCERPT_CHARS) -> str:
-    """Pick the sentences of a filing that best match the question (numbers and amounts get a bonus)."""
+ABBREV_END = re.compile(r"\b(Mr|Mrs|Ms|Dr|Prof|Shri|Smt|Ltd|Co|No|Nos|Rs|Re|Pvt|Inc|Corp|Sr|Jr|St|vs|viz|i\.e|e\.g|"
+                        r"etc|Rd|approx|Reg|Regd|Dt|w\.e\.f)\.$", re.I)
+
+
+def _segments(body: str, max_len: int = 300, overlap_words: int = 12) -> list[str]:
+    """Split a filing into pieces WITHOUT changing what any sentence says.
+
+    - PDF text wraps lines mid-sentence, so line breaks are joined back first. (Splitting on them and dropping a
+      short piece turned "No unpublished price sensitive information is proposed to be shared" into "price
+      sensitive information is proposed to be shared": the opposite meaning.)
+    - Short fragments are merged into the next sentence, never dropped.
+    - Very long sentences are cut into ~300-character windows that OVERLAP by a few words, so a "No" or "not" at a
+      cut is repeated in the next window instead of being lost.
+    Only whole sentences that are letter boilerplate ("Yours faithfully", addresses) are left out."""
+    text = re.sub(r"\s*[\r\n]+\s*", " ", body or "")
+    text = re.sub(r"\s{2,}", " ", text).strip()
+    raw = [s.strip() for s in re.split(r"(?<=[.;!?])\s+(?=[A-Z0-9(\"'“‘•])", text) if s.strip()]
+    sents = []
+    for s in raw:                       # "with Mr. Shenu Agarwal" must not be cut after "Mr."
+        if sents and ABBREV_END.search(sents[-1]):
+            sents[-1] = f"{sents[-1]} {s}"
+        else:
+            sents.append(s)
+    merged, carry = [], ""
+    for s in sents:
+        s = f"{carry} {s}".strip() if carry else s
+        if len(s) < 40:                 # too short to stand alone: keep it attached to what follows
+            carry = s
+            continue
+        carry = ""
+        merged.append(s)
+    if carry:
+        merged.append(carry)
+    out = []
+    for s in merged:
+        if len(s) <= max_len:
+            out.append(s)
+            continue
+        words, i = s.split(), 0
+        while i < len(words):
+            cur, j = [], i
+            while j < len(words) and sum(len(x) + 1 for x in cur) < max_len:
+                cur.append(words[j])
+                j += 1
+            out.append(" ".join(cur))
+            if j >= len(words):
+                break
+            i = max(i + 1, j - overlap_words)
+    return [s for s in out if not BOILER.search(s)]
+
+
+def _excerpt(body: str, query: str, limit: int = EXCERPT_CHARS, company: str = "") -> str:
+    """Pick the parts of a filing that best match the question. Question words are weighted by how rare they are
+    inside this filing, and the filing's own company name is ignored (the passage header already names the company),
+    so words like "CEO" decide. Lines with numbers and amounts get a small bonus."""
     if not body:
         return ""
-    sents = [s.strip() for s in re.split(r"(?<=[.;])\s+|\n", body) if len(s.strip()) > 20 and not BOILER.search(s)]
-    q = _tokens(query)
-    scored = sorted(range(len(sents)), key=lambda i: -(2 * len(q & _tokens(sents[i]))
-                                                        + (1 if re.search(r"\d", sents[i]) else 0)
-                                                        + (2 if re.search(r"(rs\.?|₹|crore|lakh|%|per share)", sents[i], re.I) else 0)))
+    sents = _segments(body)
+    q = _tokens(query) - _tokens(company) - {"what", "who", "which", "the", "did", "does", "this", "that", "with"}
+    seg_tokens = [_tokens(s) for s in sents]
+    df = {}
+    for st in seg_tokens:
+        for t in st & q:
+            df[t] = df.get(t, 0) + 1
+
+    def score(i):
+        s = sum(2.0 / df[t] for t in q & seg_tokens[i])
+        s += 0.5 if re.search(r"\d", sents[i]) else 0
+        s += 1.0 if re.search(r"(rs\.?|₹|crore|lakh|%|per share)", sents[i], re.I) else 0
+        return s
+
+    scored = sorted(range(len(sents)), key=lambda i: -score(i))
     keep, size = [], 0
     for i in scored:
         if size + len(sents[i]) > limit:
@@ -151,7 +241,7 @@ def build_evidence(query: str, docs: list[dict], facts: list[str] | None = None)
         summary = _clean_val(d.get("summary"))
         if summary:
             lines.append(f"Summary: {summary}")
-        ex = _excerpt(bodies.get(str(d.get("id")), ""), query)
+        ex = _excerpt(bodies.get(str(d.get("id")), ""), query, company=_clean_val(d.get("company")))
         lines.append(f"Filing text excerpt: {ex}" if ex else "Filing text excerpt: (not available: scanned or unreadable PDF)")
         out.append(Evidence(n, d, "\n".join(lines)))
     for f in facts or []:
@@ -167,6 +257,33 @@ def _norm_num(s: str) -> str:
     if "." in s:
         s = s.rstrip("0").rstrip(".")
     return s.lstrip("0") or "0"
+
+
+NEGATION = re.compile(r"\b(not|no|never|isn't|wasn't|aren't|weren't|rather than|instead of|incorrect|wrong)\b", re.I)
+
+UNIT_AFTER = re.compile(r"(?<![A-Za-z0-9])(\d[\d,]*(?:\.\d+)?)\s*(%|per\s?cent|crores?\b|cr\b|lakhs?\b|lacs?\b|"
+                        r"million\b|mn\b|billion\b|bn\b)", re.I)
+
+
+def _unit_family(u: str) -> str:
+    u = u.lower().replace(" ", "")
+    if u in ("%", "percent"):
+        return "pct"
+    if u.startswith("cr"):
+        return "crore"
+    if u.startswith(("lakh", "lac")):
+        return "lakh"
+    if u.startswith("mil") or u == "mn":
+        return "million"
+    if u.startswith("bil") or u == "bn":
+        return "billion"
+    return u
+
+
+def _num_units(text: str) -> set:
+    """{(number, unit family)} for numbers written with a unit: "362.85 crores" -> ("362.85", "crore")."""
+    t = CURRENCY_GLUE.sub(r"\1 ", PERIOD_SPACE.sub(r"\1", CITE.sub(" ", text)))
+    return {(_norm_num(n), _unit_family(u)) for n, u in UNIT_AFTER.findall(t)}
 
 
 def _numbers(text: str) -> set:
@@ -200,9 +317,55 @@ def _units(text: str) -> list[str]:
         tail = CITE.findall(parts[-1]) if parts else []
         if len(parts) > 1 and tail:
             marker = "".join(f"[{g}]" for g in tail)
-            parts = [p if CITE.search(p) else f"{p} {marker}" for p in parts]
+            # Only sentences anchored by a number or a company name inherit (and are then checked against that
+            # passage); a bare opinion sentence never borrows a citation.
+            parts = [p if CITE.search(p) or not _anchored(p) else f"{p} {marker}" for p in parts]
         units += parts
     return units
+
+
+def _anchored(text: str) -> bool:
+    """True when a sentence carries something the checker can verify: a number or a listed company's name."""
+    if _numbers(text):
+        return True
+    nu = " " + _norm_name(text) + " "
+    return any(f" {n} " in nu for n in _company_names())
+
+
+LIST_ITEM = re.compile(r"^\s*([-*•]|\d+[.)])\s+")
+
+
+def _inherit_paragraph_citations(text: str) -> str:
+    """A citation that ends a paragraph also covers that paragraph's earlier lines (the model often cites once per
+    paragraph across soft line breaks). Only lines with a number or company name inherit, and they are then
+    verified against that passage like any other cited line. List items are separate paragraphs."""
+    lines = text.splitlines()
+    out, para = [], []
+
+    def flush():
+        if not para:
+            return
+        last_cites = CITE.findall(para[-1].rstrip(" ._*"))
+        if len(para) > 1 and last_cites and CITE.search(para[-1]):
+            marker = "".join(f"[{g}]" for g in CITE.findall(para[-1]))
+            for k in range(len(para) - 1):
+                ln = para[k]
+                if ln.strip() and not CITE.search(ln) and _anchored(ln):
+                    para[k] = ln.rstrip() + f" {marker}"
+        out.extend(para)
+        para.clear()
+
+    for ln in lines:
+        if not ln.strip():
+            flush()
+            out.append(ln)
+        elif LIST_ITEM.match(ln):
+            flush()
+            out.append(ln)
+        else:
+            para.append(ln)
+    flush()
+    return "\n".join(out)
 
 
 def _is_heading(u: str) -> bool:
@@ -230,10 +393,14 @@ def _norm_name(s: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", s)).strip()
 
 
-def verify(text: str, evidence: list[Evidence]) -> list[dict]:
-    """Deterministic fact check. Returns one problem per failing unit: {"unit", "why"}."""
+def verify(text: str, evidence: list[Evidence], query: str = "") -> list[dict]:
+    """Deterministic fact check. Returns one problem per failing unit: {"unit", "why"}.
+    Lines that only echo the question (lead-ins, "the filings don't mention X") may repeat the question's numbers."""
+    qnums = _numbers(query)
     n_ev = len(evidence)
     ev_nums = {e.n: _numbers(e.text) for e in evidence}
+    all_ev_nums = set().union(*ev_nums.values()) if ev_nums else set()
+    ev_units = {e.n: _num_units(e.text) for e in evidence}
     ev_names = {e.n: _norm_name(e.text) for e in evidence}
     problems = []
     for u in _units(text):
@@ -242,17 +409,44 @@ def verify(text: str, evidence: list[Evidence]) -> list[dict]:
         if invalid:
             problems.append({"unit": u, "why": f"cites passage(s) {invalid} that do not exist"})
             continue
-        if DISCLOSURE.search(u) and not _numbers(u):
+        if DISCLOSURE.search(u) and not (_numbers(u) - qnums):
             continue                                   # "the filings do not state X" needs no citation
         if not cites:
-            if _is_heading(u):
+            # Headings and list lead-ins ("The companies that announced a buyback are:") carry no figure and
+            # introduce cited items, so they need no citation of their own. Any company they name must still
+            # appear somewhere in the evidence.
+            lead_in = u.rstrip().endswith(":") and not (_numbers(u) - qnums - all_ev_nums)
+            if _is_heading(u) or lead_in:
+                nu = " " + _norm_name(u) + " "
+                all_names = " ".join(ev_names.values())
+                bad = next((n for n in _company_names() if f" {n} " in nu and n not in all_names), None)
+                if bad:
+                    problems.append({"unit": u, "why": f"names '{bad}' which is not in any passage"})
                 continue
             problems.append({"unit": u, "why": "makes a claim without citing a passage"})
             continue
         pool_nums = set().union(*(ev_nums[c] for c in cites))
-        missing = sorted(x for x in _numbers(u) - pool_nums if len(x) >= 1)
+        negated = bool(NEGATION.search(u))
+        # A number from the question may appear only to deny it: "362.85 crores, not Rs. 500 crore".
+        missing = sorted(x for x in _numbers(u) - pool_nums - (qnums if negated else set()) if len(x) >= 1)
         if missing:
             problems.append({"unit": u, "why": f"number(s) {missing} do not appear in the cited passage(s) {sorted(set(cites))}"})
+            continue
+        # Units: "Rs. 50,00,00,000" is 50 crore; writing "Rs. 50,00,00,000 crores" is 10 million times wrong although
+        # the digits match. A number written with a unit must carry the same unit somewhere in the cited passage.
+        pool_units = set().union(*(ev_units[c] for c in cites))
+        bad_units = []
+        for n, f in _num_units(u):
+            if (n, f) in pool_units or (negated and n in qnums):
+                continue
+            other_units = {pf for pn, pf in pool_units if pn == n}
+            # Flag only real conflicts: the passage writes this number with a DIFFERENT unit, or a full rupee amount
+            # (>= 10 lakh written out) gets a scale word added. Table values whose unit sits in a column header
+            # ("7,690 (INR Million)") are not flagged.
+            if other_units or (f in ("crore", "lakh", "million", "billion") and float(n) >= 1e6):
+                bad_units.append(f"{n} {f}")
+        if bad_units:
+            problems.append({"unit": u, "why": f"unit(s) {bad_units} differ from how the cited passage(s) write that number"})
             continue
         pool_names = " ".join(ev_names[c] for c in cites)
         nu = " " + _norm_name(u) + " "
@@ -302,8 +496,59 @@ def _clean(text: str) -> str:
     return "\n".join(lines).strip()
 
 
+def _openai_models() -> list[str]:
+    if not os.getenv("OPENAI_API_KEY", "").strip():
+        return []
+    return [m.strip() for m in os.getenv("OPENAI_MODELS", DEFAULT_OPENAI_MODELS).split(",") if m.strip()]
+
+
+def llm_available(client) -> bool:
+    return bool(_openai_models()) or client is not None
+
+
+def _retry_wait(text: str) -> float | None:
+    m = re.search(r"try again in ([\d.]+)\s*(ms|s)", text or "", re.I)
+    return (float(m.group(1)) / (1000 if m.group(2).lower() == "ms" else 1)) if m else None
+
+
+def _chat_openai(model: str, system: str, user: str) -> str:
+    """One OpenAI chat call. Raises RuntimeError with the reason if it fails."""
+    body = {"model": model, "temperature": 0, "max_completion_tokens": 1500,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+    for attempt in range(3):
+        try:
+            r = requests.post(OPENAI_URL, json=body, timeout=60,
+                              headers={"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY', '').strip()}"})
+        except requests.RequestException as e:
+            raise RuntimeError(f"{model} (OpenAI): network error {type(e).__name__}")
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"].get("content") or ""
+        err = r.text[:300]
+        # Some newer models only accept the default temperature: retry once without it.
+        if r.status_code == 400 and "temperature" in err and "temperature" in body:
+            body.pop("temperature")
+            continue
+        wait = _retry_wait(err)
+        if r.status_code == 429 and "insufficient_quota" not in err and wait is not None and wait <= 12 and attempt < 2:
+            time.sleep(wait + 0.5)
+            continue
+        raise RuntimeError(f"{model} (OpenAI): HTTP {r.status_code} {err[:120]}")
+    raise RuntimeError(f"{model} (OpenAI): gave up after retries")
+
+
 def _chat(client, system: str, user: str) -> tuple[str, str]:
+    """Try OpenAI models first (if OPENAI_API_KEY is set), then the Groq chain. Returns (text, model label)."""
     last = None
+    for model in _openai_models():
+        try:
+            text = _chat_openai(model, system, user)
+            if text.strip():
+                return _clean(text), f"{model} (OpenAI)"
+            last = f"{model} (OpenAI): empty reply"
+        except RuntimeError as e:          # bad key, no credit, rate limit, network: try the next model
+            last = str(e)
+    if client is None:
+        raise RuntimeError(last or "no language model key configured")
     for model in MODELS:
         kw = {"reasoning_effort": "low"} if model.startswith("openai/gpt-oss") else {}
         for attempt in range(2):
@@ -313,15 +558,14 @@ def _chat(client, system: str, user: str) -> tuple[str, str]:
                     messages=[{"role": "system", "content": system}, {"role": "user", "content": user}], **kw)
                 text = r.choices[0].message.content or ""
                 if text.strip():
-                    return _clean(text), model
-                last = f"{model}: empty reply"
+                    return _clean(text), f"{model} (Groq)"
+                last = f"{model} (Groq): empty reply"
                 break
             except Exception as e:
-                last = f"{model}: {type(e).__name__}: {str(e)[:120]}"
+                last = f"{model} (Groq): {type(e).__name__}: {str(e)[:120]}"
                 # Groq's free tier is 8k tokens/minute per model. A short wait keeps the strongest model instead of
                 # falling back to a weaker one (weaker models cite less reliably, so more gets trimmed).
-                m = re.search(r"try again in ([\d.]+)\s*(ms|s)", str(e))
-                wait = (float(m.group(1)) / (1000 if m.group(2) == "ms" else 1)) if m else None
+                wait = _retry_wait(str(e))
                 if attempt == 0 and wait is not None and wait <= 12:
                     time.sleep(wait + 0.5)
                     continue
@@ -341,7 +585,7 @@ def answer(client, query: str, docs: list[dict], history: list[dict] | None = No
     res.steps.append(_step("evidence", "📋", f"{len(evidence)} numbered passages assembled",
                            f"{with_text} include text from the filing PDF; the rest have only the headline. "
                            "The model may answer only from these and must cite each claim as [n]."))
-    if client is None:
+    if not llm_available(client):
         res.status = "no_llm"
         res.text = "\n".join(f"- **{_clean_val(e.doc.get('company'))}** ({_clean_val(e.doc.get('date'))}): "
                              f"{_clean_val(e.doc.get('headline'))} [{e.n}]" for e in evidence if e.doc is not None)
@@ -375,7 +619,8 @@ def answer(client, query: str, docs: list[dict], history: list[dict] | None = No
         return res
 
     t = time.time()
-    problems = verify(draft, evidence)
+    draft = _inherit_paragraph_citations(draft)
+    problems = verify(draft, evidence, query)
     res.problems = problems
     final = draft
     if not problems:
@@ -394,11 +639,11 @@ def answer(client, query: str, docs: list[dict], history: list[dict] | None = No
                 problems="\n".join(f"- \"{p['unit']}\": {p['why']}" for p in problems), draft=draft))
         except RuntimeError:
             pass
-        # Accept the rewrite only if it passes the full check and introduces no number the draft didn't have.
-        # (Adding citations is allowed: that is usually the fix, and verify() proves each one is real and
-        # that every number sits in the passage it cites.)
-        ok = (fixed and "INSUFFICIENT_CONTEXT" not in fixed and not verify(fixed, evidence)
-              and _numbers(fixed) <= _numbers(draft))
+        # Accept the rewrite only if it passes the full check: every citation real, every number and company
+        # in the passage it cites. (Adding a citation is usually the fix; correcting a number from the cited
+        # passage is allowed because verify() proves the corrected number is in that passage.)
+        fixed = _inherit_paragraph_citations(fixed) if fixed else fixed
+        ok = bool(fixed) and "INSUFFICIENT_CONTEXT" not in fixed and not verify(fixed, evidence, query)
         if ok:
             final, res.status = fixed, "repaired"
             res.steps.append(_step("repair", "🛠️", "Answer rewritten and re-checked",
@@ -409,7 +654,7 @@ def answer(client, query: str, docs: list[dict], history: list[dict] | None = No
             # leave a summary line that no longer has support).
             final, res.removed = _drop(draft, problems)
             for _ in range(3):
-                left = verify(final, evidence)
+                left = verify(final, evidence, query)
                 if not left:
                     break
                 final, more = _drop(final, left)

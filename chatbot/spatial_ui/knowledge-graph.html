@@ -449,8 +449,8 @@
     <div class="hud-right">
       <div class="telemetry-card">
         <div class="tele-item">
-          <span class="tele-label">NIFTY 50</span>
-          <span class="tele-val" id="nifty-val">24,367.45 <span style="color:var(--green)">+0.62%</span></span>
+          <span class="tele-label" id="nifty-label">BUSIEST DAY</span>
+          <span class="tele-val" id="nifty-val">—</span>
         </div>
         <div class="tele-item">
           <span class="tele-label">FPS</span>
@@ -555,16 +555,21 @@
       { ticker: "WIPRO", name: "Wipro Limited", sector: "IT / Tech", price: 564.10, change: 0.15, importance: 74, arm: 0, conglomerateGroup: "other" }
     ];
 
-    // Seed historical sparkline values
+    // REAL DATA ONLY (the 2,766 NSE filings of 9-15 Nov 2026): each node shows its company's filing count in the
+    // 7-day window, its highest importance score and a sparkline of filings per day. No prices, no simulated moves.
+    const KG_FILINGS = (window.MarketTideFilings && window.MarketTideFilings.getAllFilings)
+      ? window.MarketTideFilings.getAllFilings() : (window.RAW_FILINGS_DATA || []);
+    const KG_DAYS = [...new Set(KG_FILINGS.map(f => f.date).filter(Boolean))].sort();
+    const KG_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const kgDay = (iso) => { const [y, m, d] = iso.split('-').map(Number); return `${d} ${KG_MONTHS[m - 1]}`; };
+    const KG_WINDOW = KG_DAYS.length ? `${kgDay(KG_DAYS[0])}–${kgDay(KG_DAYS[KG_DAYS.length - 1])} 2026` : '7-day window';
     STOCKS.forEach(s => {
-      s.initialPrice = s.price;
-      s.sparkline = [];
-      let p = s.price * 0.96;
-      for (let i = 0; i < 30; i++) {
-        p += (Math.random() - 0.48) * (s.price * 0.012);
-        s.sparkline.push(p);
-      }
-      s.sparkline.push(s.price);
+      const mine = KG_FILINGS.filter(f => String(f.ticker || '').toUpperCase() === s.ticker.toUpperCase());
+      s.filings = mine.length;
+      s.importance = mine.reduce((m, f) => Math.max(m, Number(f.importance_score) || 0), 0);
+      s.sparkline = KG_DAYS.map(d => mine.filter(f => f.date === d).length);   // filings per day, 9 -> 15 Nov
+      s.price = s.filings;            // fields kept for the existing code; they now hold real 7-day values
+      s.change = s.filings > 0 ? 1 : 0;
     });
 
     // ---------------------------------------------------------------------------
@@ -626,8 +631,8 @@
       ctx.roundRect(0, 0, 512, 288, 20);
       ctx.fill();
 
-      // Border with importance coloring
-      const isPositive = stock.change >= 0;
+      // Border: green when the company filed in the 7-day window, slate when it did not
+      const isPositive = stock.filings > 0;
       ctx.lineWidth = 4;
       ctx.strokeStyle = isPositive ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)';
       ctx.stroke();
@@ -641,14 +646,14 @@
       ctx.font = '500 20px "IBM Plex Mono", monospace';
       ctx.fillText(stock.sector.toUpperCase(), 28, 86);
 
-      // Price & Change
-      const priceText = '₹' + stock.price.toFixed(2);
+      // Filings in the 7-day window & top importance score (real data)
+      const priceText = `${stock.filings} filing${stock.filings === 1 ? '' : 's'}`;
       ctx.fillStyle = '#f8fafc';
       ctx.font = '600 32px "IBM Plex Mono", monospace';
       ctx.fillText(priceText, 28, 140);
 
-      const chgText = (isPositive ? '+' : '') + stock.change.toFixed(2) + '%';
-      ctx.fillStyle = isPositive ? '#10b981' : '#ef4444';
+      const chgText = stock.filings > 0 ? `top score ${stock.importance}/100` : `no filings ${KG_WINDOW}`;
+      ctx.fillStyle = isPositive ? '#10b981' : '#64748b';
       ctx.font = 'bold 24px "IBM Plex Mono", monospace';
       ctx.fillText(chgText, 28, 172);
 
@@ -677,7 +682,7 @@
         const sparkH = 55;
 
         ctx.beginPath();
-        ctx.strokeStyle = isPositive ? '#10b981' : '#ef4444';
+        ctx.strokeStyle = isPositive ? '#10b981' : '#64748b';
         ctx.lineWidth = 3;
         for (let j = 0; j < pts.length; j++) {
           const x = sparkX + (j / (pts.length - 1)) * sparkW;
@@ -888,33 +893,19 @@
       return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
     }
 
-    setInterval(() => {
-      for (let k = 0; k < 3; k++) {
-        const randIdx = Math.floor(Math.random() * STOCKS.length);
-        const s = STOCKS[randIdx];
-        const S0 = s.initialPrice;
-        const returnPct = -0.08 * ((s.price - S0) / S0) + 0.008 * boxMullerRandom();
-        s.price = Math.max(10.0, s.price * (1 + returnPct));
-        s.change = ((s.price - S0) / S0) * 100;
-        s.sparkline.shift();
-        s.sparkline.push(s.price);
-
-        const mesh = stockMeshes[randIdx];
-        if (mesh) {
-          const newCanvas = renderStockCanvas(s);
-          mesh.material.map.dispose();
-          mesh.material.map = new THREE.CanvasTexture(newCanvas);
-          mesh.material.needsUpdate = true;
-        }
+    // No simulated market moves: every number on this page comes from the 7-day filings and never changes.
+    // The top-right telemetry slot shows the busiest day in the data.
+    (function showBusiestDay() {
+      const perDay = {};
+      KG_FILINGS.forEach(f => { if (f.date) perDay[f.date] = (perDay[f.date] || 0) + 1; });
+      const busiest = Object.entries(perDay).sort((a, b) => b[1] - a[1])[0];
+      const labelEl = document.getElementById('nifty-label');
+      const valEl = document.getElementById('nifty-val');
+      if (labelEl) labelEl.textContent = 'BUSIEST DAY';
+      if (valEl && busiest) {
+        valEl.innerHTML = `${kgDay(busiest[0])} <span style="color:var(--green)">${busiest[1].toLocaleString('en-IN')} filings</span>`;
       }
-
-      const niftyEl = document.getElementById('nifty-val');
-      if (niftyEl) {
-        const chg = (Math.random() - 0.48) * 4.5;
-        const curNifty = 24367.45 + chg;
-        niftyEl.innerHTML = `${curNifty.toFixed(2)} <span style="color:${chg >= 0 ? 'var(--green)' : 'var(--red)'}">${chg >= 0 ? '+' : ''}${(chg/243.67).toFixed(2)}%</span>`;
-      }
-    }, 1200);
+    })();
 
     // ---------------------------------------------------------------------------
     // INTERACTION & RAYCASTING (Click-to-RAG)
@@ -945,7 +936,7 @@
         tooltip.style.display = 'block';
         tooltip.style.left = (e.clientX + 16) + 'px';
         tooltip.style.top = (e.clientY + 16) + 'px';
-        tooltip.innerHTML = `<strong>${s.ticker}</strong> · ${s.name}<br><span style="color:var(--cyan)">₹${s.price.toFixed(2)} (${s.change >= 0 ? '+' : ''}${s.change.toFixed(2)}%)</span><br><span style="color:var(--muted)">Click to inspect verified SEBI filings</span>`;
+        tooltip.innerHTML = `<strong>${s.ticker}</strong> · ${s.name}<br><span style="color:var(--cyan)">${s.filings} filing${s.filings === 1 ? '' : 's'} in ${KG_WINDOW}${s.filings ? ` · top score ${s.importance}/100` : ''}</span><br><span style="color:var(--muted)">Click to inspect verified SEBI filings</span>`;
         document.body.style.cursor = 'pointer';
       } else {
         hoveredMesh = null;
@@ -977,7 +968,7 @@
       controls.autoRotate = false;
 
       document.getElementById('drawer-company').innerText = stock.name;
-      document.getElementById('drawer-meta').innerText = `${stock.ticker} · ${stock.sector.toUpperCase()} · ₹${stock.price.toFixed(2)} (${stock.change >= 0 ? '+' : ''}${stock.change.toFixed(2)}%)`;
+      document.getElementById('drawer-meta').innerText = `${stock.ticker} · ${stock.sector.toUpperCase()} · ${stock.filings} filing${stock.filings === 1 ? '' : 's'} in ${KG_WINDOW}`;
 
       // Fetch verified filings dynamically from MarketTideFilings engine
       let filings = [];
@@ -1004,11 +995,11 @@
         list.innerHTML = `
           <div class="filing-card">
             <div class="filing-header">
-              <span>Nov 15, 2026</span>
-              <span style="color:var(--cyan)">Active Monitoring</span>
+              <span>${KG_WINDOW}</span>
+              <span style="color:var(--cyan)">7-day window</span>
             </div>
-            <div class="filing-title">No direct statutory disclosures in 7-day reporting window</div>
-            <div class="filing-summary">${stock.name} is under active surveillance. Historical disclosures are accessible via the NSE archive portal.</div>
+            <div class="filing-title">No filings in the 7-day data</div>
+            <div class="filing-summary">${stock.name} published no NSE filings between ${KG_WINDOW}, so there is nothing to show for it in this dataset.</div>
             <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(stock.ticker)}" target="_blank" rel="noopener noreferrer" class="filing-link">
               View NSE Equity Profile ↗
             </a>
@@ -1024,8 +1015,7 @@
           company: stock.name,
           sector: stock.sector,
           conglomerateGroup: stock.conglomerateGroup || '',
-          livePrice: stock.price,
-          percentageChange: stock.change,
+          topImportanceScore: stock.importance,
           filingsCount: filings.length,
           timestamp: Date.now()
         });

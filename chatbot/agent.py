@@ -5,6 +5,7 @@ tool execution, strict zero-hallucination relevance gates, and real-time streami
 """
 
 import os
+import datetime as dt
 import re
 from typing import Generator
 from dotenv import load_dotenv
@@ -38,6 +39,7 @@ FOREIGN_OR_NON_NSE = {
 BENCHMARK_NSE_COMPANIES = {
     # IT & Tech
     "infosys": {"company": "Infosys Limited", "ticker": "INFY"},
+    "zee": {"company": "Zee Entertainment Enterprises Limited", "ticker": "ZEEL"},
     "infy": {"company": "Infosys Limited", "ticker": "INFY"},
     "tcs": {"company": "Tata Consultancy Services Limited", "ticker": "TCS"},
     "wipro": {"company": "Wipro Limited", "ticker": "WIPRO"},
@@ -190,6 +192,28 @@ OUT_OF_DOMAIN_PATTERNS = [
     r'\b(what\s+is\s+machine\s+learning|what\s+is\s+deep\s+learning|what\s+is\s+artificial\s+intelligence|how\s+does\s+neural\s+network\s+work|backpropagation)\b'
 ]
 
+# Prices that filings themselves state (not live market data)
+FILING_PRICE_CONTEXT = re.compile(
+    r"\b(buy[\s-]?back|premium|offer\s+price|issue\s+price|floor\s+price|tender\s+offer|open\s+offer|rights\s+issue|qip|"
+    r"preferential|price\s+sensitive)\b")
+
+EXTRA_CATEGORIES = [
+    (("open offer", "takeover offer"), "Open Offer"),
+    (("stock split", "share split", "subdivision", "sub-division", " split "), "Split"),
+    (("credit rating", "rating update", "rating upgrade", "rating downgrade", " ratings "), "Ratings Update"),
+    (("rights issue",), "Rights Issue"),
+    (("acquisition", " acquire", "takeover"), "Acquisition"),
+    (("fund raising", "fundraising", "raise funds", " qip "), "Fund Raising"),
+    (("usfda", "fda approval", "product approval", "drug approval"), "Product Approval"),
+    (("joint venture", "partnership", " mou ", "tie-up"), "Partnership"),
+    (("merger", "amalgamation", "scheme of arrangement", "demerger"), "Scheme Of Arrangement"),
+    (("insolvency", "nclt", "committee of creditors"), "Nclt"),
+    (("capacity addition", "new plant", "commercial production", "capacity expansion"), "Capacity Increase"),
+]
+
+MONTHS = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10,
+          "nov": 11, "dec": 12}
+
 GREETING_PATTERNS = [
     r'^(hi|hello|hey|good\s+(morning|afternoon|evening)|namaste|greetings|howdy|what\'?s\s+up|sup|hola)[\s!.,?]*$',
     r'^(hi|hello|hey|good\s+(morning|afternoon|evening)|namaste)[\s!.,?]+(how\s+are\s+you|how\s+are\s+you\s+today|how\'?re\s+you)[\s!.,?]*$',
@@ -284,6 +308,10 @@ class MarketTideAgent:
             w_upper = w.upper()
             if w in DISALLOWED_SINGLE_WORDS and not (has_corp_indicator or f"nse:{w}" in q_lower or f"bse:{w}" in q_lower):
                 continue
+            # Common words count as tickers only when written like one (capitals, NSE:/BSE: prefix, or alone).
+            if w in DISALLOWED_SINGLE_WORDS and len(words) > 1 and not (
+                    re.search(r"\b" + re.escape(w_upper) + r"\b", query) or f"nse:{w}" in q_lower or f"bse:{w}" in q_lower):
+                continue
             exact_ticker = self.tools.df[self.tools.df['ticker'].str.upper() == w_upper]
             if not exact_ticker.empty:
                 if has_corp_indicator or len(words) == 1 or w not in DISALLOWED_SINGLE_WORDS:
@@ -348,7 +376,10 @@ class MarketTideAgent:
             r'\b(is\s+the\s+market\s+open|market\s+hours|trading\s+hours|market\s+timing|market\s+holiday|trading\s+holiday|open\s+today|closed\s+today)\b',
             r'\b(how\s+do\s+i\s+buy\s+shares|how\s+to\s+buy\s+stocks|how\s+to\s+invest|open\s+demat|demat\s+account|brokerage|zerodha|groww|upstox|angel\s+one)\b'
         ]
-        if any(re.search(pat, q_lower) for pat in live_market_data_patterns):
+        live_hits = [i for i, pat in enumerate(live_market_data_patterns) if re.search(pat, q_lower)]
+        # A price stated in a filing (buyback price and its premium over the market price, offer/issue price) is
+        # in scope; a live quote is not.
+        if live_hits and not (set(live_hits) == {0} and FILING_PRICE_CONTEXT.search(q_lower)):
             return {"intent": "OUT_OF_DOMAIN", "entities": {}}
 
         # 4. Stage 1: High-Confidence Entity Check (Multi-word company or exact ticker with context)
@@ -382,7 +413,10 @@ class MarketTideAgent:
                     }
 
         # 5. Out-of-domain check (sports, celebrities, weather, science, geography, cooking, coding, chitchat)
-        if any(re.search(pat, q_lower) for pat in OUT_OF_DOMAIN_PATTERNS):
+        #    Exception: a price that a FILING states (buyback price, its premium over the market price, an open-offer
+        #    or issue price) is in scope, even though "market price" alone would mean a live quote.
+        ood_hits = [i for i, pat in enumerate(OUT_OF_DOMAIN_PATTERNS) if re.search(pat, q_lower)]
+        if ood_hits and not (set(ood_hits) == {0} and FILING_PRICE_CONTEXT.search(q_lower)):
             return {"intent": "OUT_OF_DOMAIN", "entities": {}}
 
         # 6. Financial advice / stock tip check (Compliance)
@@ -413,8 +447,45 @@ class MarketTideAgent:
             return {"intent": "CATEGORY", "entities": {"category": "Order"}}
         if any(w in q_lower for w in ["management", "director", "resignation", "appointment", "ceo", "cfo"]):
             return {"intent": "CATEGORY", "entities": {"category": "Change in Management"}}
+        # Other filing categories present in the 7-day data, so "which companies announced X" lists ALL of them
+        # (ranked by importance) with the true total, instead of a few semantic-search hits.
+        for words, category in EXTRA_CATEGORIES:
+            if any(w in f" {q_lower} " for w in words):
+                return {"intent": "CATEGORY", "entities": {"category": category}}
 
         return {"intent": "GENERAL", "entities": {}}
+
+    def date_in_query(self, query: str):
+        """'14 November', 'Nov 14', '14th nov', '2026-11-14', 'yesterday', 'today' -> 'YYYY-MM-DD'.
+        Relative words are anchored to the latest date in the data. Returns None when no date is mentioned and
+        'outside' when the date falls outside the 7-day window (so we never answer with other days' filings)."""
+        q = query.lower()
+        dates = sorted(str(x) for x in self.tools.df["date"].dropna().unique())
+        if not dates:
+            return None
+        first, last = dates[0], dates[-1]
+        anchor = dt.date.fromisoformat(last)
+        if re.search(r"\byesterday\b", q):
+            d = anchor - dt.timedelta(days=1)
+        elif re.search(r"\btoday\b", q):
+            d = anchor
+        else:
+            m = re.search(r"\b(20\d\d)-(\d{2})-(\d{2})\b", q)
+            if m:
+                d = dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            else:
+                m = (re.search(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b", q)
+                     or re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?\b", q))
+                if not m:
+                    return None
+                a, b = m.groups()
+                day, mon = (int(a), MONTHS[b[:3]]) if a.isdigit() else (int(b), MONTHS[a[:3]])
+                try:
+                    d = dt.date(anchor.year, mon, day)
+                except ValueError:
+                    return None
+        iso = d.isoformat()
+        return iso if first <= iso <= last else "outside"
 
     def is_financial_or_corporate_query(self, query: str, intent_data: dict) -> bool:
         """
@@ -487,10 +558,20 @@ class MarketTideAgent:
 
         if intent == "CATEGORY":
             cat = entities.get("category", "")
-            docs = self.tools.filter_by_category(cat, min_score=45, top_k=grounding.MAX_EVIDENCE)
+            # All matching filings ranked by importance (no score cut-off), so a list is as complete as the evidence
+            # budget allows; the true total is added as a database fact.
+            docs = self.tools.filter_by_category(cat, min_score=0, top_k=grounding.MAX_EVIDENCE)
             return docs, f"category:{cat}"
 
         if intent == "TOP_FILINGS":
+            day = self.date_in_query(query)
+            if day == "outside":                      # e.g. "most important filings on 20 November"
+                return [], "out_of_window"
+            if day:                                   # "most important filings on 14 November" / "yesterday"
+                df = self.tools.df
+                docs = (df[df["date"] == day].sort_values(by=["importance_score"], ascending=False)
+                        .head(grounding.MAX_EVIDENCE).to_dict(orient="records"))
+                return docs, f"top_filings:{day}"
             docs = self.tools.get_top_high_impact(top_k=6)
             return docs, "top_filings"
 
@@ -686,14 +767,18 @@ class MarketTideAgent:
         #    every claim -> deterministic fact check -> one validated rewrite or drop the failing sentences ->
         #    decline if nothing verified remains. The whole answer is checked BEFORE anything is shown.
         facts = []
+        shown = min(len(docs), grounding.MAX_EVIDENCE)
         if intent_data["intent"] == "CATEGORY":
             cat = intent_data.get("entities", {}).get("category", "")
-            total = len(self.tools.filter_by_category(cat, min_score=45, top_k=100000))
-            shown = min(len(docs), grounding.MAX_EVIDENCE)
+            total = len(self.tools.filter_by_category(cat, min_score=0, top_k=100000))
             if total > shown:
-                facts.append(f"{total} filings in the database match '{cat}' (importance score 45 or more). "
-                             f"Only the {shown} most important are given as passages here, so any list built from "
-                             f"them shows {shown} of {total}.")
+                facts.append(f"{total} filings in the 7-day data match '{cat}'. Only the {shown} most important are "
+                             f"given as passages here, so any list built from them shows {shown} of {total}.")
+        elif (tool_context or "").startswith("top_filings:"):
+            day = tool_context.split(":", 1)[1]
+            total = int((self.tools.df["date"] == day).sum())
+            facts.append(f"{total} filings in the 7-day data are dated {day}. The {shown} with the highest importance "
+                         f"scores are given as passages here.")
         # A bare name ("Tata", "Kaynes Tech") is not a question; the strict prompt would rightly call it
         # unanswerable. It means "what did this company/group announce?", so ask exactly that.
         llm_query = query

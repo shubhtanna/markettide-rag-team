@@ -53,7 +53,13 @@ DISALLOWED_SINGLE_WORDS = {
     "titan", "idea", "crown", "point", "clean", "diamond", "force", "time", "drive",
     "solve", "federal", "hero", "target", "focus", "speed", "deep", "bright", "gem",
     "sky", "moon", "date", "bombay", "nice", "celebrity", "singer", "film", "films",
-    "vehicle", "vehicles", "delivery", "report", "reports"
+    "vehicle", "vehicles", "delivery", "report", "reports",
+    # Everyday filing vocabulary that is also a ticker or a company's first word ("premium" -> Premium Plast)
+    "premium", "offer", "offers", "price", "prices", "record", "result", "results", "profit", "profits",
+    "order", "orders", "rating", "ratings", "approval", "approvals", "plant", "capacity", "rights", "issue",
+    "fund", "funds", "merger", "scheme", "board", "meeting", "quarter", "quarterly", "annual", "interim",
+    "final", "equity", "debt", "loan", "credit", "share", "shares", "buyback", "bonus", "split", "dividend",
+    "acquisition", "stake", "promoter", "revenue", "margin", "growth", "outlook"
 }
 
 # Explicit corporate indicators that confirm a financial/equity context
@@ -68,6 +74,7 @@ CORPORATE_INDICATORS = {
 
 # Major NSE listed companies (including those with 0 filings in the Nov 9-15 window)
 MAJOR_NSE_COMPANIES = [
+    {"ticker": "ZEEL", "company": "Zee Entertainment Enterprises Limited", "aliases": ["zee entertainment", "zeel", "zee"]},
     {"ticker": "INFY", "company": "Infosys Limited", "aliases": ["infosys", "infy", "infosys limited"]},
     {"ticker": "WIPRO", "company": "Wipro Limited", "aliases": ["wipro", "wipro limited"]},
     {"ticker": "ICICIBANK", "company": "ICICI Bank Limited", "aliases": ["icici bank", "icicibank", "icici bank limited", "icici"]},
@@ -170,6 +177,12 @@ class MarketTools:
         for w in words:
             w_upper = w.upper()
             if w in DISALLOWED_SINGLE_WORDS and not (has_corp_indicator or f"nse:{w}" in q_lower or f"bse:{w}" in q_lower):
+                continue
+            # A common word ("premium", "order") only counts as a ticker when written like one: in capitals,
+            # with an NSE:/BSE: prefix, or as the whole query. Otherwise "Zee's buyback premium" became Premium Plast.
+            if w in DISALLOWED_SINGLE_WORDS and not (re.search(r"\b" + re.escape(w_upper) + r"\b", query)
+                                                     or f"nse:{w}" in q_lower or f"bse:{w}" in q_lower
+                                                     or is_exact_ticker_query):
                 continue
             exact_ticker = self.df[self.df['ticker'].str.upper() == w_upper]
             if not exact_ticker.empty:

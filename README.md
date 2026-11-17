@@ -8,7 +8,7 @@ A RAG chatbot over **2,766 NSE corporate filings (9–15 Nov 2026)**. This branc
 python -m venv .venv
 .venv\Scripts\activate            # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-copy .env.example .env            # then paste your GROQ_API_KEY into .env
+copy .env.example .env            # then paste your OPENAI_API_KEY (and/or GROQ_API_KEY) into .env
 streamlit run chatbot/app.py
 ```
 
@@ -33,6 +33,16 @@ Open http://localhost:8501.
     left, the bot replies "I don't know".
   - `[n]` in the answer is row n of the filings table.
 
+## Home page
+
+The home page is search-first: a search box, six example questions (a company fact, numbers from a PDF,
+a list, a comparison, a date, a business group) and nine category chips (dividends, buybacks, order wins,
+acquisitions, credit ratings, open offers, management changes, fund raising, stock splits), each showing how
+many filings of that kind were filed that week. Clicking a card or chip asks that question; the MARKET TIDE
+logo returns to the home page. Everything on the page comes from the 2,766 filings of 9–15 Nov 2026, and the
+Knowledge Graph shows each company's filing count, top importance score and filings per day. No prices or
+simulated numbers.
+
 ## Evaluate
 
 ```bash
@@ -40,7 +50,8 @@ python eval/product_eval.py       # 26 questions incl. traps -> eval/product_eva
 python -m pytest tests -q         # guard-rail tests
 ```
 
-Groq's free tier allows about 200k tokens per day on `gpt-oss-120b` (roughly 60–70 questions). Running the full
-evaluation uses a large part of that.
+Answers come from OpenAI (`gpt-4.1-mini`, then `gpt-4o-mini`) when `OPENAI_API_KEY` is set, otherwise from Groq.
+Groq's free tier allows about 200k tokens per day on `gpt-oss-120b` (roughly 60–70 questions); OpenAI is
+pay-per-use (a few tenths of a cent per question with `gpt-4.1-mini`).
 
 *For information only. Not investment advice.*
