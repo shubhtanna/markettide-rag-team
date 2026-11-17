@@ -26,6 +26,14 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, CURRENT_DIR)
 
 from agent import MarketTideAgent, CONGLOMERATE_GROUPS
+try:
+    from api import start_background_server
+except ImportError:
+    try:
+        from chatbot.api import start_background_server
+    except Exception:
+        def start_background_server(agent):
+            return None
 
 def esc(s) -> str:
     """Escape HTML strings for safe rendering."""
@@ -538,6 +546,7 @@ def load_agent():
     return MarketTideAgent()
 
 agent = load_agent()
+start_background_server(agent)
 
 # ----------------- SIDEBAR CONTROLS -----------------
 with st.sidebar:
