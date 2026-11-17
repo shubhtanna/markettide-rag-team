@@ -1,41 +1,57 @@
-# Market Tide: RAG Chatbot (class assignment)
+# Market Tide: Spatial Financial Intelligence chatbot (Streamlit)
 
-A RAG chatbot that answers questions about the **last 7 days of NSE corporate filings**.
-This repo is separate from the live Market Tide product. It has no keys, no database and
-no connection to the real website.
+A RAG chatbot over **2,766 NSE corporate filings (9–15 Nov 2026)**. This branch holds **only the chatbot**.
 
-## What's here
-
-| Folder | What it is |
-|---|---|
-| `site/` | Read-only copy of the Market Tide home page. Nothing is clickable except **Ask the Chatbot**. Plain HTML/CSS, no backend. |
-| `data/filings_last_7_days.csv` | 2,766 important filings, 9 to 15 Nov 2026, from public NSE disclosures. |
-| `docs/` | Project overview and RAG plan PDFs. **Read these first.** |
-| `chatbot/` | The Streamlit chatbot we will build. |
-| `tools/build_home.py` | Rebuilds `site/index.html` from the CSV. |
-
-## Run the home page locally
+## Run it
 
 ```bash
-python -m http.server 8000 --directory site
+python -m venv .venv
+.venv\Scripts\activate            # macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+copy .env.example .env            # then paste your OPENAI_API_KEY (and/or GROQ_API_KEY) into .env
+streamlit run chatbot/app.py
 ```
 
-Then open http://localhost:8000.
+Open http://localhost:8501.
 
-## The dataset
+## How it works
 
-One row per filing: `id, date, time, exchange, company, ticker, category, tag,
-importance_score, headline, summary, description, pdf_url, page_url`.
+- **UI:** `chatbot/spatial_ui/index.html` is the Spatial Financial Intelligence page, served as a Streamlit
+  custom component and shown full-screen. When you search, the page sends the question to Streamlit's Python
+  backend and shows the answer it returns. Opened on its own (outside Streamlit), the page falls back to its
+  original in-browser keyword search.
+- **Backend (`chatbot/agent.py`, `tools.py`, `retriever.py`):** guard rails (advice, out-of-domain, non-NSE,
+  out-of-window), company and conglomerate routing, and hybrid retrieval (BM25 + MiniLM vectors, RRF).
+  The pre-built index is in `chatbot/cache/`.
+- **Answering (`chatbot/grounding.py`, adapted from MedEvolv Mentor):**
+  - The evidence is numbered `[1]..[n]`: each filing's headline plus the matching part of its PDF text
+    (`data/filings_enriched.csv`).
+  - The model writes a draft at temperature 0 and must cite every claim.
+  - A deterministic fact check runs before anything is shown: every citation must be real, and every number
+    and company named must appear in the passage it cites.
+  - One rewrite is allowed; if it still fails, the failing sentences are dropped. If nothing verified is
+    left, the bot replies "I don't know".
+  - `[n]` in the answer is row n of the filings table.
 
-- Source: public NSE corporate announcements (equities, SME, debt, InvITs/REITs),
-  filtered to remove routine paperwork (importance score >= 45), with duplicates merged.
-- BSE is **not included**: BSE's site refused automated requests during the export.
-- `summary` is **empty for now**. `description` is built from company + category + date + headline.
-  Headlines are short, so we will add AI summaries before building the chatbot.
+## Home page
 
-## Secrets
+The home page is search-first: a search box, six example questions (a company fact, numbers from a PDF,
+a list, a comparison, a date, a business group) and nine category chips (dividends, buybacks, order wins,
+acquisitions, credit ratings, open offers, management changes, fund raising, stock splits), each showing how
+many filings of that kind were filed that week. Clicking a card or chip asks that question; the MARKET TIDE
+logo returns to the home page. Everything on the page comes from the 2,766 filings of 9–15 Nov 2026, and the
+Knowledge Graph shows each company's filing count, top importance score and filings per day. No prices or
+simulated numbers.
 
-The home page needs **no keys**. The chatbot needs **one free LLM key per person** (Groq or
-Gemini). Copy `.env.example` to `.env` and fill it in. `.env` is gitignored, so never commit it.
+## Evaluate
+
+```bash
+python eval/product_eval.py       # 26 questions incl. traps -> eval/product_eval.md
+python -m pytest tests -q         # guard-rail tests
+```
+
+Answers come from OpenAI (`gpt-4.1-mini`, then `gpt-4o-mini`) when `OPENAI_API_KEY` is set, otherwise from Groq.
+Groq's free tier allows about 200k tokens per day on `gpt-oss-120b` (roughly 60–70 questions); OpenAI is
+pay-per-use (a few tenths of a cent per question with `gpt-4.1-mini`).
 
 *For information only. Not investment advice.*

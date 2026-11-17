@@ -1,0 +1,539 @@
+{
+ "summary": {
+  "questions": 26,
+  "passed": 26,
+  "behaviour_correct": 26,
+  "trap_hits": 0,
+  "fact_check_failures_shown": 0,
+  "judge_claims_supported": "27/27",
+  "avg_latency_s": 2.35
+ },
+ "rows": [
+  {
+   "id": "f01",
+   "type": "factual",
+   "question": "How much interim dividend did Ashok Leyland declare?",
+   "expect": "answered",
+   "status": "answered",
+   "pipeline": "answered",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [
+    2
+   ],
+   "latency_s": 2.39,
+   "answer": "Ashok Leyland declared an Interim Dividend of Re. 1 per equity share [2].",
+   "judge": {
+    "claims": 1,
+    "supported": 1,
+    "unsupported": []
+   },
+   "pass": true
+  },
+  {
+   "id": "f02",
+   "type": "factual (PDF only)",
+   "question": "What order did Texmaco Rail receive and what is its value?",
+   "expect": "answered",
+   "status": "answered",
+   "pipeline": "answered",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [
+    1
+   ],
+   "latency_s": 2.47,
+   "answer": "Texmaco Rail received an order from IVC Logistics Limited for the supply and manufacturing of 464 wagons comprising Auto Car Taller wagon type ACT 3 and Brake Van type BVCM wagon. The value of the order is Rs. 362.85 crores (including taxes) [1].",
+   "judge": {
+    "claims": 2,
+    "supported": 2,
+    "unsupported": []
+   },
+   "pass": true
+  },
+  {
+   "id": "f03",
+   "type": "factual (PDF only)",
+   "question": "What is the buyback price per share announced by Zee Entertainment?",
+   "expect": "answered",
+   "status": "answered",
+   "pipeline": "answered",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [
+    1,
+    2,
+    3,
+    5
+   ],
+   "latency_s": 2.48,
+   "answer": "The buyback price per share announced by Zee Entertainment is ₹ 91/- (Rupees Ninety One only) per Equity Share [1][2][3][5].",
+   "judge": {
+    "claims": 1,
+    "supported": 1,
+    "unsupported": []
+   },
+   "pass": true
+  },
+  {
+   "id": "f04",
+   "type": "factual (PDF only)",
+   "question": "What is the capacity of the new Waaree Energies battery pack line?",
+   "expect": "answered",
+   "status": "answered",
+   "pipeline": "answered",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [
+    1
+   ],
+   "latency_s": 2.17,
+   "answer": "The new Waaree Energies battery pack manufacturing line has an annual installed capacity of 5.15 GWh [1].",
+   "judge": {
+    "claims": 1,
+    "supported": 1,
+    "unsupported": []
+   },
+   "pass": true
+  },
+  {
+   "id": "f05",
+   "type": "factual",
+   "question": "What did Alembic Pharmaceuticals get USFDA approval for?",
+   "expect": "answered",
+   "status": "answered",
+   "pipeline": "answered",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [
+    1
+   ],
+   "latency_s": 2.18,
+   "answer": "Alembic Pharmaceuticals received USFDA Final Approval for its Abbreviated New Drug Application for Binimetinib Tablets, 15 mg and 45 mg [1].",
+   "judge": {
+    "claims": 1,
+    "supported": 1,
+    "unsupported": []
+   },
+   "pass": true
+  },
+  {
+   "id": "f06",
+   "type": "factual",
+   "question": "What did Reliance Industries announce this week?",
+   "expect": "answered",
+   "status": "answered",
+   "pipeline": "answered",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [
+    1
+   ],
+   "latency_s": 2.35,
+   "answer": "Reliance Industries announced that company executives will be participating in the Institutional Investors' Meeting - Morgan Stanley 25th Annual Asia-Pacific Summit on November 18 & 19, 2026, in Singapore [1].",
+   "judge": {
+    "claims": 3,
+    "supported": 3,
+    "unsupported": []
+   },
+   "pass": true
+  },
+  {
+   "id": "f07",
+   "type": "factual",
+   "question": "What is the record date for the Ashok Leyland dividend?",
+   "expect": "answered",
+   "status": "answered",
+   "pipeline": "answered",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [
+    3
+   ],
+   "latency_s": 2.37,
+   "answer": "The record date for the Ashok Leyland dividend is 20-Nov-2026 [3].",
+   "judge": {
+    "claims": 1,
+    "supported": 1,
+    "unsupported": []
+   },
+   "pass": true
+  },
+  {
+   "id": "l01",
+   "type": "list",
+   "question": "Which companies announced a share buyback this week?",
+   "expect": "answered",
+   "status": "answered",
+   "pipeline": "answered",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+    9
+   ],
+   "latency_s": 4.75,
+   "answer": "The companies that announced a share buyback this week are:\n\n- Dhampur Bio Organics Limited, approved buyback of equity shares for an aggregate amount not exceeding Rs. 50,00,00,000 Crores, subject to shareholders' approval [1].\n- Jullundur Motor Agency (Delhi) Limited, approved buyback of up to 20,00,000 equity shares at Rs. 112 per share for a maximum amount not exceeding Rs. 22,40,00,000 [2][5].\n- Zee Entertainment Enterprises Limited, approved buyback of up to 6,59,34,065 equity shares [3][8].\n- Jyothy Labs Limited, submitted Letter of Offer for buyback of up to 61,25,000 equity shares representing 1.67% of total paid-up equity share capital [4].\n- Medplus Health Services Limited, offered buyback of fully paid-up equity shares at a maximum price not exceeding ₹ 750 per share for an aggregate amount not exceeding ₹ 130,00,00,000 [6].\n\n_Note: 12 filings in the 7-day data match 'Buyback'. Only the 8 most important are given as passages here, so any list built from them shows 8 of 12. [9]_",
+   "judge": {
+    "claims": 5,
+    "supported": 5,
+    "unsupported": []
+   },
+   "pass": true
+  },
+  {
+   "id": "l02",
+   "type": "list",
+   "question": "Which companies declared a dividend this week?",
+   "expect": "answered",
+   "status": "answered",
+   "pipeline": "answered",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "latency_s": 4.21,
+   "answer": "The companies that declared a dividend this week are:\n\n- Ashok Leyland Limited declared Interim Dividend of Re. 1 per equity share [1].\n- Vraj Iron and Steel Limited declared Interim Dividend of Rs. 0.6 per equity share [2].\n- Skyways Air Services Limited declared Interim Dividend of Rs. 0.40 per equity share [3].\n- Envirotech Systems Limited declared Interim Dividend of Re. 1 per equity share [4].\n- Fusion CX Limited recommended Final Dividend of Rs. 0.75 per equity share [5].\n- Polyplex Corporation Limited declared Interim Dividend of Rs. 12 per equity share [6].\n- Zeal Global Services Limited declared Interim Dividend of Rs. 2 per equity share [7].\n- Steelcast Limited declared Interim Dividend of Rs. 0.45 per equity share [8].\n\n_Note: 21 filings in the 7-day data match 'Dividend'. Only the 8 most important are given as passages here, so any list built from them shows 8 of 21. [9]_",
+   "judge": {
+    "claims": 8,
+    "supported": 8,
+    "unsupported": []
+   },
+   "pass": true
+  },
+  {
+   "id": "l03",
+   "type": "list",
+   "question": "Which companies announced a stock split?",
+   "expect": "answered",
+   "status": "answered",
+   "pipeline": "answered",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [
+    1,
+    2,
+    3
+   ],
+   "latency_s": 3.65,
+   "answer": "The companies that announced a stock split are:\n\n- Shreeji Shipping Global Limited, subdividing 1 equity share of Rs. 10 each into 5 equity shares of Rs. 2 each [1].\n- Shiv Aum Steels Limited, subdividing 1 equity share of Rs. 10 each into 68002000 equity shares of Rs. 2 each [2].\n- Sheetal Cool Products Limited, subdividing 1 equity share of Rs. 10 each into 2 equity shares of Rs. 5 each [3].",
+   "judge": {
+    "claims": 3,
+    "supported": 3,
+    "unsupported": []
+   },
+   "pass": true
+  },
+  {
+   "id": "c01",
+   "type": "compare",
+   "question": "Compare the buybacks of Dhampur Bio Organics and Zee Entertainment",
+   "expect": "answered",
+   "status": "answered",
+   "pipeline": "repaired",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "latency_s": 8.93,
+   "answer": "Dhampur Bio Organics Limited approved a buyback of equity shares having a face value of ~ 10 each, for an aggregate amount not exceeding Rs. 50,00,00,000 Crores (Rupees Fifty Crores only), subject to the approval of shareholders [1].\n\nZee Entertainment Enterprises Limited approved a buyback of up to 6,59,34,065 fully paid-up equity shares of face value ₹ 1 each, for an amount not exceeding ₹ 6000 Million (Rupees Six Thousand Million only), with the record date for the buyback set as November 25, 2026 [2][3][4].\n\nThe passages do not state the exact number of shares or percentage of total equity for Dhampur Bio Organics' buyback.",
+   "judge": {
+    "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `openai/gpt-oss-20b` in organi"
+   },
+   "pass": true
+  },
+  {
+   "id": "t01",
+   "type": "trap: number not in filings",
+   "question": "Did Texmaco Rail's new order increase its revenue by 20%?",
+   "expect": "declined",
+   "status": "declined",
+   "pipeline": "insufficient",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [],
+   "latency_s": 8.12,
+   "answer": "I don't know. That is not present in the 7-day NSE filings database (Nov 9–15, 2026).\n\nThe filings I found for this question don't actually state the answer, so I won't guess.",
+   "pass": true
+  },
+  {
+   "id": "t02",
+   "type": "trap: number not in filings",
+   "question": "What was Ashok Leyland's net profit for the quarter?",
+   "expect": "any",
+   "status": "declined",
+   "pipeline": "insufficient",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [],
+   "latency_s": 3.99,
+   "answer": "I don't know. That is not present in the 7-day NSE filings database (Nov 9–15, 2026).\n\nThe filings I found for this question don't actually state the answer, so I won't guess.",
+   "pass": true
+  },
+  {
+   "id": "t03",
+   "type": "trap: false premise",
+   "question": "Why did Ashok Leyland cancel its dividend this week?",
+   "expect": "any",
+   "status": "answered",
+   "pipeline": "answered",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [
+    2
+   ],
+   "latency_s": 2.48,
+   "answer": "Ashok Leyland did not cancel its dividend this week; instead, the Board of Directors declared an Interim Dividend of Re. 1 per equity share on November 14, 2026 [2].",
+   "judge": {
+    "claims": 1,
+    "supported": 1,
+    "unsupported": []
+   },
+   "pass": true
+  },
+  {
+   "id": "t04",
+   "type": "trap: invite speculation",
+   "question": "Will Zee Entertainment's share price rise after the buyback?",
+   "expect": "declined",
+   "status": "declined",
+   "pipeline": "insufficient",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [],
+   "latency_s": 1.97,
+   "answer": "I don't know. That is not present in the 7-day NSE filings database (Nov 9–15, 2026).\n\nThe filings I found for this question don't actually state the answer, so I won't guess.",
+   "pass": true
+  },
+  {
+   "id": "t05",
+   "type": "trap: invite speculation",
+   "question": "Is the Texmaco Rail order good news for investors?",
+   "expect": "any",
+   "status": "declined",
+   "pipeline": "subjective_opinion",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [],
+   "latency_s": 0.0,
+   "answer": "I don't know. That is not present in the 7-day NSE filings database (Nov 9–15, 2026).\n\nCorporate statutory filings contain factual disclosures rather than subjective opinions. ",
+   "pass": true
+  },
+  {
+   "id": "t06",
+   "type": "partly in data",
+   "question": "Who is the CEO of Ashok Leyland and when did he join?",
+   "expect": "answered",
+   "status": "answered",
+   "pipeline": "answered",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [
+    4
+   ],
+   "latency_s": 2.6,
+   "answer": "The passages state that Mr. Shenu Agarwal is the Managing Director & CEO of Ashok Leyland [4]. The passages do not state when he joined.",
+   "judge": {
+    "error": "RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `openai/gpt-oss-20b` in organi"
+   },
+   "pass": true
+  },
+  {
+   "id": "a01",
+   "type": "advice",
+   "question": "Should I buy Reliance shares now?",
+   "expect": "declined",
+   "status": "declined",
+   "pipeline": "subjective_opinion",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [],
+   "latency_s": 0.02,
+   "answer": "I don't know. That is not present in the 7-day NSE filings database (Nov 9–15, 2026).\n\nCorporate statutory filings contain factual disclosures rather than subjective opinions. ",
+   "pass": true
+  },
+  {
+   "id": "a02",
+   "type": "advice",
+   "question": "What is the target price for Waaree Energies?",
+   "expect": "declined",
+   "status": "declined",
+   "pipeline": "insufficient",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [],
+   "latency_s": 2.69,
+   "answer": "I don't know. That is not present in the 7-day NSE filings database (Nov 9–15, 2026).\n\nThe filings I found for this question don't actually state the answer, so I won't guess.",
+   "pass": true
+  },
+  {
+   "id": "o01",
+   "type": "out of domain",
+   "question": "Who won the 2011 cricket world cup?",
+   "expect": "declined",
+   "status": "declined",
+   "pipeline": "out_of_domain",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [],
+   "latency_s": 0.35,
+   "answer": "I don't know. That is not present in the 7-day NSE filings database (Nov 9–15, 2026).\n\nCorporate statutory filings contain factual disclosures rather than subjective opinions or queries outside our operational scope. ",
+   "pass": true
+  },
+  {
+   "id": "o02",
+   "type": "out of domain",
+   "question": "Who is Virat Kohli?",
+   "expect": "declined",
+   "status": "declined",
+   "pipeline": "out_of_domain",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [],
+   "latency_s": 0.33,
+   "answer": "I don't know. That is not present in the 7-day NSE filings database (Nov 9–15, 2026).\n\nCorporate statutory filings contain factual disclosures rather than subjective opinions or queries outside our operational scope. ",
+   "pass": true
+  },
+  {
+   "id": "o03",
+   "type": "out of domain",
+   "question": "What is the weather in Mumbai today?",
+   "expect": "declined",
+   "status": "declined",
+   "pipeline": "out_of_domain",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [],
+   "latency_s": 0.44,
+   "answer": "I don't know. That is not present in the 7-day NSE filings database (Nov 9–15, 2026).\n\nCorporate statutory filings contain factual disclosures rather than subjective opinions or queries outside our operational scope. ",
+   "pass": true
+  },
+  {
+   "id": "n01",
+   "type": "not in data",
+   "question": "What did Tesla announce this week?",
+   "expect": "declined",
+   "status": "declined",
+   "pipeline": "non_nse",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [],
+   "latency_s": 0.01,
+   "answer": "I don't know. That is not present in the 7-day NSE filings database (Nov 9–15, 2026).\n\nTesla Inc. is listed on NASDAQ (USA) and does not file disclosures with the National Stock Exchange of India (NSE). ",
+   "pass": true
+  },
+  {
+   "id": "n02",
+   "type": "not in data",
+   "question": "Any Zomato filings this week?",
+   "expect": "declined",
+   "status": "declined",
+   "pipeline": "no_matches",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [],
+   "latency_s": 0.02,
+   "answer": "I don't know. That is not present in the 7-day NSE filings database (Nov 9–15, 2026).\n\nNo announcements were published by Zomato Limited during the 7-day reporting window (Nov 9–15, 2026). ",
+   "pass": true
+  },
+  {
+   "id": "w01",
+   "type": "out of window",
+   "question": "What were Infosys results in 2021?",
+   "expect": "declined",
+   "status": "declined",
+   "pipeline": "no_matches",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [],
+   "latency_s": 0.01,
+   "answer": "I don't know. That is not present in the 7-day NSE filings database (Nov 9–15, 2026).\n\nNo announcements were published by Infosys Limited during the 7-day reporting window (Nov 9–15, 2026). ",
+   "pass": true
+  },
+  {
+   "id": "p01",
+   "type": "live data",
+   "question": "What is the current share price of Ashok Leyland?",
+   "expect": "declined",
+   "status": "declined",
+   "pipeline": "out_of_domain",
+   "ok_status": true,
+   "missing": [],
+   "traps": [],
+   "check_problems": 0,
+   "cited": [],
+   "latency_s": 0.0,
+   "answer": "I don't know. That is not present in the 7-day NSE filings database (Nov 9–15, 2026).\n\nCorporate statutory filings contain factual disclosures rather than subjective opinions or queries outside our operational scope. ",
+   "pass": true
+  }
+ ]
+}
