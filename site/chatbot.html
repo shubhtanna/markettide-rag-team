@@ -319,14 +319,14 @@
 
     <!-- View Mode Toggles -->
     <div class="view-toggles-strip">
-      <button type="button" class="view-toggle-btn active" id="btn-split-view" onclick="setWorkstationView('split')">
+      <button type="button" class="view-toggle-btn active" id="btn-chatbot-view" onclick="setWorkstationView('chatbot-only')">
+        <span>💬 RAG Chatbot</span>
+      </button>
+      <button type="button" class="view-toggle-btn" id="btn-split-view" onclick="setWorkstationView('split')">
         <span>◫ Split View</span>
       </button>
       <button type="button" class="view-toggle-btn" id="btn-nebula-view" onclick="setWorkstationView('nebula-only')">
         <span>🪐 3D Nebula</span>
-      </button>
-      <button type="button" class="view-toggle-btn" id="btn-chatbot-view" onclick="setWorkstationView('chatbot-only')">
-        <span>💬 Chatbot</span>
       </button>
     </div>
 
@@ -346,7 +346,7 @@
   </header>
 
   <!-- Responsive Multi-Panel Workstation Layout -->
-  <main class="workstation-container" id="workstationShell" data-view="split">
+  <main class="workstation-container" id="workstationShell" data-view="chatbot-only">
     <!-- Panel 1: Three.js 3D Stock Nebula -->
     <section class="panel-nebula" id="panelNebula" aria-label="3D Stock Nebula Spatial Graph">
       <iframe id="nebulaFrame" src="3d-nebula.html" title="Three.js 3D Stock Nebula" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"></iframe>

@@ -1,41 +1,61 @@
-# Market Tide: RAG Chatbot (class assignment)
+# 🌊 MarketTide — Autonomous RAG Regulatory Chatbot
 
-A RAG chatbot that answers questions about the **last 7 days of NSE corporate filings**.
-This repo is separate from the live Market Tide product. It has no keys, no database and
-no connection to the real website.
+An autonomous multi-hop Retrieval-Augmented Generation (RAG) intelligence assistant for **2,766 statutory National Stock Exchange (NSE) corporate disclosures** (reporting window: November 9–15, 2026).
 
-## What's here
+This branch (`RAG-Chatbot`) is **entirely independent** and configured to **directly launch and land on the RAG Chatbot interface**.
 
-| Folder | What it is |
-|---|---|
-| `site/` | Read-only copy of the Market Tide home page. Nothing is clickable except **Ask the Chatbot**. Plain HTML/CSS, no backend. |
-| `data/filings_last_7_days.csv` | 2,766 important filings, 9 to 15 Nov 2026, from public NSE disclosures. |
-| `docs/` | Project overview and RAG plan PDFs. **Read these first.** |
-| `chatbot/` | The Streamlit chatbot we will build. |
-| `tools/build_home.py` | Rebuilds `site/index.html` from the CSV. |
+---
 
-## Run the home page locally
+## ⚡ Quick Start
 
+### 1. Install Requirements
 ```bash
-python -m http.server 8000 --directory site
+pip install -r requirements.txt
 ```
 
-Then open http://localhost:8000.
+### 2. Configure Environment Key
+Copy `.env.example` to `.env` and insert your free Groq API key:
+```bash
+cp .env.example .env
+```
+In `.env`:
+```bash
+GROQ_API_KEY=gsk_your_key_here
+```
+*(Get a free key in 30 seconds at [https://console.groq.com/keys](https://console.groq.com/keys))*
 
-## The dataset
+### 3. Launch the Chatbot
+Run any of the following — they all land directly on the chatbot interface:
 
-One row per filing: `id, date, time, exchange, company, ticker, category, tag,
-importance_score, headline, summary, description, pdf_url, page_url`.
+```bash
+# Option A: Standard Streamlit Runner (Recommended)
+streamlit run app.py
 
-- Source: public NSE corporate announcements (equities, SME, debt, InvITs/REITs),
-  filtered to remove routine paperwork (importance score >= 45), with duplicates merged.
-- BSE is **not included**: BSE's site refused automated requests during the export.
-- `summary` is **empty for now**. `description` is built from company + category + date + headline.
-  Headlines are short, so we will add AI summaries before building the chatbot.
+# Option B: Direct Python Execution
+python app.py
 
-## Secrets
+# Option C: Shell Runner
+./run.sh
+```
 
-The home page needs **no keys**. The chatbot needs **one free LLM key per person** (Groq or
-Gemini). Copy `.env.example` to `.env` and fill it in. `.env` is gitignored, so never commit it.
+Terminal will launch directly at: **`http://localhost:8501`**
 
-*For information only. Not investment advice.*
+---
+
+## 🏗️ Architecture & Features
+
+- **Hybrid Dense + Sparse Search**: Dense semantic vector embeddings (`all-MiniLM-L6-v2`) + BM25 Okapi with Reciprocal Rank Fusion (RRF).
+- **Strict Zero-Hallucination Guardrails**:
+  - Direct out-of-domain and conversational rejection (*"I don't have filings for that query"*).
+  - Cross-validation against indexed corporate entities.
+  - Zero false-positive source citations.
+- **Multi-Hop Conglomerate Routing**: Automated entity resolution for groups like Tata Group (25 filings across TMPV, TATAPOWER, TATASTEEL, TCS), Adani, and Reliance.
+- **Verifiable Audit Dossiers**: Every cited statement includes timestamp, category tag, importance score, and official NSE PDF links.
+- **Process Execution Timeline**: Inspect retrieval stages, execution latencies (ms), and similarity match rankings.
+
+---
+
+## 🌐 Web & Cloud Deployment
+- **Streamlit Community Cloud**: Ready out-of-the-box (`app.py` & `streamlit_app.py`).
+- **Render**: Blueprint configured via `render.yaml`.
+- **Docker / Heroku**: Configured via `Procfile`.
