@@ -13,3 +13,6 @@ venv/
 # vector store built locally
 chroma_db/
 *.faiss
+
+# downloaded embedding models
+chatbot/.model_cache/
