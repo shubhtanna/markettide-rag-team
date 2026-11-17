@@ -11,6 +11,45 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="filings_data.js?v=2.2.0"></script>
   <script src="market-tide-bus.js"></script>
+  <script>
+    /* Streamlit bridge (custom component protocol, no build step).
+       The page sends each search to the Streamlit Python backend (RAG + fact check) and receives the verified
+       answer back. Opened outside Streamlit, the page falls back to its original in-browser search. */
+    window.StreamlitBridge = (function () {
+      const inStreamlit = window.parent !== window;
+      let pending = null;
+      let onResponse = null;
+      const send = (type, data) => window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type }, data), "*");
+      const fitHeight = () => {
+        let h = 900;
+        try { h = window.parent.innerHeight; } catch (e) { /* cross-origin: keep default */ }
+        send("streamlit:setFrameHeight", { height: h });
+      };
+      window.addEventListener("message", (event) => {
+        const msg = event.data;
+        if (!msg || msg.type !== "streamlit:render") return;
+        const res = (msg.args || {}).response;
+        if (res && pending && res.nonce === pending && onResponse) {
+          pending = null;
+          onResponse(res.data);
+        }
+      });
+      if (inStreamlit) {
+        send("streamlit:componentReady", { apiVersion: 1 });
+        fitHeight();
+        window.addEventListener("resize", fitHeight);
+        try { window.parent.addEventListener("resize", fitHeight); } catch (e) { /* ignore */ }
+      }
+      return {
+        active: inStreamlit,
+        ask(query, callback) {
+          pending = Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+          onResponse = callback;
+          send("streamlit:setComponentValue", { value: { query, nonce: pending }, dataType: "json" });
+        },
+      };
+    })();
+  </script>
   <style>
     :root {
       --bg: #070b14;
@@ -490,6 +529,10 @@
       flex-direction: column;
       gap: 1.25rem;
     }
+    /* Scroll fix: flex children used to shrink to fit (and clip), so the panel never had anything to scroll. */
+    .results-scroll-container > * {
+      flex-shrink: 0;
+    }
     .results-scroll-container::-webkit-scrollbar {
       width: 6px;
     }
@@ -539,6 +582,7 @@
       font-size: 0.88rem;
       line-height: 1.55;
       color: #cbd5e1;
+      white-space: pre-line;   /* keep the verified answer's line breaks / bullets */
     }
     .synthesis-metrics {
       display: flex;
@@ -1651,7 +1695,29 @@
       canvasContainer.classList.add('canvas-dimmed');
       heroHud.classList.add('hidden');
 
-      // 2. Query 2,766 dataset engine
+      // 2. Inside Streamlit: ask the Python RAG backend. The panel opens straight away with its usual
+      //    "Synthesizing verified disclosures..." state and fills in when the fact-checked answer arrives.
+      if (window.StreamlitBridge && window.StreamlitBridge.active) {
+        renderSearchResults({
+          query: q, totalMatches: "…", results: [],
+          synthesis: { title: "Executive Disclosures Dossier", summary: "Synthesizing verified disclosures...", highlights: [] }
+        });
+        document.getElementById('filings-table-body').innerHTML = "";
+        searchOverlay.classList.add('active');
+        window.StreamlitBridge.ask(q, (data) => {
+          renderSearchResults(data);
+          const scroller = document.querySelector('.results-scroll-container');
+          if (scroller) scroller.scrollTop = 0;
+          if (window.MarketTideBus) {
+            window.MarketTideBus.emit('market-tide:scene-action', {
+              action: 'SEARCH_SUBMITTED', query: q, matches: data.totalMatches, timestamp: Date.now()
+            });
+          }
+        });
+        return;
+      }
+
+      // 2b. Standalone (opened without Streamlit): original in-browser search over the 2,766 filings
       let searchData = null;
       if (window.MarketTideFilings) {
         searchData = window.MarketTideFilings.search(q, { limit: 60 });
