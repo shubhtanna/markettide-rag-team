@@ -1,179 +1,1820 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0a0b0d">
-<title>Market Tide — the NSE &amp; BSE filings that actually matter</title>
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="readonly.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>MarketTide AI — Executive Financial Terminal &amp; Regulatory RAG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="filings_data.js?v=2.2.0"></script>
+  <script src="market-tide-bus.js"></script>
+  <style>
+    :root {
+      --bg: #070b14;
+      --surface: rgba(15, 23, 42, 0.75);
+      --surface-elevated: rgba(15, 23, 42, 0.92);
+      --border: rgba(30, 41, 59, 0.85);
+      --border-focus: rgba(6, 182, 212, 0.55);
+      --ink: #f8fafc;
+      --muted: #94a3b8;
+      --dim: #64748b;
+      --cyan: #06b6d4;
+      --cyan-glow: rgba(6, 182, 212, 0.25);
+      --green: #10b981;
+      --red: #ef4444;
+      --amber: #f59e0b;
+      --font-sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'IBM Plex Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Full-Bleed Centered Three.js 3D Ambient Scene */
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+                  filter 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+                  transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+      transform-origin: center center;
+    }
+
+    /* Dynamic Background Dimming Transition */
+    #canvas-container.canvas-dimmed {
+      opacity: 0.18;
+      filter: blur(8px) brightness(0.45);
+      transform: scale(0.96);
+      pointer-events: none;
+    }
+
+    /* Top Executive Navigation Bar */
+    .top-navbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4rem;
+      padding: 0 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 40;
+      background: linear-gradient(180deg, rgba(7, 11, 20, 0.85) 0%, rgba(7, 11, 20, 0) 100%);
+      pointer-events: none;
+    }
+    .nav-brand-wrap, .nav-actions-wrap {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .brand-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      background: var(--surface);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.95rem;
+      border-radius: 9999px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    .brand-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 10px var(--green);
+      animation: pulseDot 2s infinite ease-in-out;
+    }
+    @keyframes pulseDot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.7; }
+    }
+    .brand-name {
+      font-weight: 700;
+      font-size: 0.92rem;
+      letter-spacing: -0.02em;
+    }
+    .terminal-tag {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--cyan);
+      background: rgba(6, 182, 212, 0.12);
+      border: 1px solid rgba(6, 182, 212, 0.25);
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    /* Live Filing Counter Badge */
+    .counter-badge {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      color: var(--muted);
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.85rem;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .counter-val {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    /* Navigation Link to Dedicated 3D Knowledge Graph */
+    .nav-kg-link {
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 0.82rem;
+      font-weight: 600;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(6, 182, 212, 0.35);
+      padding: 0.45rem 1rem;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+    .nav-kg-link:hover {
+      background: rgba(6, 182, 212, 0.15);
+      border-color: var(--cyan);
+      box-shadow: 0 0 20px var(--cyan-glow);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    /* Centered Ambient Canvas Overlay Guide (Hero Label) */
+    .hero-hud {
+      position: fixed;
+      top: 25%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+      z-index: 10;
+      transition: opacity 0.5s ease, transform 0.5s ease;
+      width: min(840px, 92vw);
+    }
+    .hero-hud.hidden {
+      opacity: 0;
+      transform: translate(-50%, -55%);
+      pointer-events: none;
+    }
+    .hero-pill-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--cyan);
+      background: rgba(6, 182, 212, 0.1);
+      border: 1px solid rgba(6, 182, 212, 0.25);
+      padding: 0.28rem 0.85rem;
+      border-radius: 9999px;
+      margin-bottom: 0.85rem;
+      backdrop-filter: blur(12px);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+    .hero-pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 10px var(--cyan);
+      animation: pulseDot 2s infinite ease-in-out;
+    }
+    @keyframes pulseDot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.4); }
+    }
+    .hero-title {
+      font-size: clamp(2.1rem, 4.2vw, 3.2rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      background: linear-gradient(180deg, #ffffff 30%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.75rem;
+    }
+    .hero-sub {
+      font-size: clamp(0.88rem, 1.4vw, 1.05rem);
+      color: var(--muted);
+      max-width: 620px;
+      margin: 0 auto;
+      line-height: 1.55;
+    }
+
+    /* Floating Executive Search Dock Anchored at the BOTTOM */
+    /* Interactive 3D Chart Timeframe & Ticker Chips */
+    .dock-chips-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      gap: 0.5rem;
+      padding: 0 0.25rem;
+    }
+    .timeframe-group, .ticker-group {
+      display: flex;
+      gap: 0.35rem;
+      align-items: center;
+    }
+    .tf-btn {
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.22rem 0.55rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .tf-btn:hover {
+      color: #fff;
+      border-color: rgba(0, 208, 156, 0.45);
+      background: rgba(15, 23, 42, 0.9);
+      transform: translateY(-1px);
+    }
+    .tf-btn.active {
+      background: rgba(0, 208, 156, 0.16);
+      border-color: #00d09c;
+      color: #00d09c;
+      box-shadow: 0 0 12px rgba(0, 208, 156, 0.25);
+    }
+    .ticker-btn {
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.22rem 0.65rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .ticker-btn:hover {
+      color: #fff;
+      border-color: rgba(6, 182, 212, 0.45);
+      background: rgba(15, 23, 42, 0.9);
+      transform: translateY(-1px);
+    }
+    .ticker-btn.active {
+      background: rgba(6, 182, 212, 0.16);
+      border-color: #06b6d4;
+      color: #06b6d4;
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.25);
+    }
+
+    .bottom-search-dock {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(760px, calc(100vw - 3rem));
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .dock-glass-card {
+      background: var(--surface-elevated);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 0.5rem 0.6rem 0.5rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+    }
+    .dock-glass-card:focus-within {
+      border-color: var(--border-focus);
+      box-shadow: 0 16px 50px rgba(0, 0, 0, 0.75), 0 0 25px var(--cyan-glow);
+      transform: translateY(-2px);
+    }
+
+    .dock-search-icon {
+      color: var(--cyan);
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .dock-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--ink);
+      font-size: 0.98rem;
+      font-family: var(--font-sans);
+    }
+    .dock-input::placeholder {
+      color: var(--dim);
+      font-size: 0.9rem;
+    }
+
+    .dock-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      flex-shrink: 0;
+    }
+    .kbd-shortcut {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--dim);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      padding: 0.2rem 0.45rem;
+      border-radius: 6px;
+    }
+    .dock-submit-btn {
+      background: var(--cyan);
+      border: none;
+      color: #04101e;
+      font-weight: 600;
+      font-size: 0.84rem;
+      padding: 0.5rem 1rem;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: all 0.2s ease;
+      font-family: var(--font-sans);
+    }
+    .dock-submit-btn:hover {
+      background: #22d3ee;
+      box-shadow: 0 0 15px rgba(6, 182, 212, 0.5);
+    }
+
+    /* Micro-interaction Pulse on Search Dock */
+    @keyframes dockPulse {
+      0% { transform: scale(1); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6); }
+      50% { transform: scale(1.02); box-shadow: 0 16px 50px rgba(6, 182, 212, 0.4), 0 0 30px rgba(6, 182, 212, 0.5); }
+      100% { transform: scale(1); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6); }
+    }
+    .dock-glass-card.search-pulse {
+      animation: dockPulse 0.4s cubic-bezier(0.34, 1.35, 0.64, 1);
+    }
+
+    /* Foreground Search Results & Filing Dossiers Overlay (R1 Animated Search Expansion) */
+    #search-results-overlay {
+      position: fixed;
+      inset: 0;
+      top: 4.5rem;
+      bottom: 6.5rem;
+      width: min(1180px, calc(100vw - 3rem));
+      margin: 0 auto;
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transform-origin: bottom center;
+      transform: scale(0.92) translateY(50px);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      background: rgba(10, 15, 29, 0.85);
+      backdrop-filter: blur(28px) saturate(180%);
+      -webkit-backdrop-filter: blur(28px) saturate(180%);
+      border: 1px solid rgba(30, 41, 59, 0.8);
+      border-radius: 18px;
+      box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.85), 0 0 45px rgba(6, 182, 212, 0.15);
+      transition: transform 0.45s cubic-bezier(0.34, 1.35, 0.64, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.45s;
+    }
+    #search-results-overlay.active {
+      transform: scale(1) translateY(0);
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
+    .results-header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 0.5rem;
+      margin-bottom: 0.5rem;
+      flex-shrink: 0;
+    }
+    .results-query-echo {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+    .results-count-pill {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--cyan);
+      background: rgba(6, 182, 212, 0.12);
+      border: 1px solid rgba(6, 182, 212, 0.25);
+      padding: 0.2rem 0.55rem;
+      border-radius: 9999px;
+    }
+
+    .close-results-btn {
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 0.4rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s ease;
+      font-family: var(--font-sans);
+    }
+    .close-results-btn:hover {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #fff;
+    }
+
+    /* Scrollable Results Container */
+    .results-scroll-container {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+    .results-scroll-container::-webkit-scrollbar {
+      width: 6px;
+    }
+    .results-scroll-container::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 9999px;
+    }
+
+    /* AI Executive Synthesis Card */
+    .synthesis-card {
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(6, 182, 212, 0.35);
+      border-radius: 14px;
+      padding: 1.25rem 1.5rem;
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+    .synthesis-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .synthesis-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--green);
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+    }
+    .synthesis-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+    .synthesis-summary {
+      font-size: 0.88rem;
+      line-height: 1.55;
+      color: #cbd5e1;
+    }
+    .synthesis-metrics {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .synthesis-metric-pill {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      padding: 0.3rem 0.65rem;
+      border-radius: 6px;
+    }
+
+    /* Executive Financial Filings Layout (R2) */
+    .dossiers-heading {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.25rem;
+    }
+    .filings-table-container {
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(30, 41, 59, 0.8);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    }
+    .filings-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.85rem;
+    }
+    .filings-table thead {
+      background: rgba(10, 15, 29, 0.85);
+      border-bottom: 1px solid rgba(30, 41, 59, 0.9);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .filings-table th {
+      padding: 0.85rem 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .filings-table tbody tr.filing-row {
+      border-bottom: 1px solid rgba(30, 41, 59, 0.6);
+      transition: background 0.18s ease;
+      cursor: pointer;
+    }
+    .filings-table tbody tr.filing-row:hover {
+      background: rgba(6, 182, 212, 0.07);
+    }
+    .filings-table tbody tr.filing-row.expanded {
+      background: rgba(6, 182, 212, 0.1);
+      border-bottom-color: transparent;
+    }
+    .filings-table td {
+      padding: 0.75rem 1rem;
+      vertical-align: middle;
+    }
+    .col-date {
+      width: 13%;
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      color: var(--dim);
+      white-space: nowrap;
+    }
+    .col-ticker {
+      width: 10%;
+    }
+    .ticker-badge {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 0.78rem;
+      color: var(--cyan);
+      background: rgba(6, 182, 212, 0.12);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      display: inline-block;
+      letter-spacing: 0.03em;
+    }
+    .col-company {
+      width: 22%;
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 0.88rem;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+    .col-category {
+      width: 14%;
+    }
+    .category-badge {
+      font-family: var(--font-sans);
+      font-size: 0.72rem;
+      font-weight: 500;
+      padding: 0.2rem 0.55rem;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      white-space: nowrap;
+    }
+    .category-results {
+      background: rgba(16, 185, 129, 0.12);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+    .category-dividend, .category-buyback {
+      background: rgba(245, 158, 11, 0.12);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+    .category-investor_meet, .category-board_meeting {
+      background: rgba(6, 182, 212, 0.12);
+      color: #22d3ee;
+      border: 1px solid rgba(6, 182, 212, 0.25);
+    }
+    .category-acquisition, .category-order, .category-management {
+      background: rgba(139, 92, 246, 0.12);
+      color: #a78bfa;
+      border: 1px solid rgba(139, 92, 246, 0.25);
+    }
+    .category-general {
+      background: rgba(148, 163, 184, 0.12);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+    .col-headline {
+      width: 31%;
+      font-family: var(--font-sans);
+      font-size: 0.84rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .headline-text {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      color: #e2e8f0;
+    }
+    .col-action {
+      width: 10%;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .filing-pdf-btn {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--cyan);
+      background: rgba(6, 182, 212, 0.1);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      transition: all 0.2s ease;
+    }
+    .filing-pdf-btn:hover {
+      background: var(--cyan);
+      color: #04101e;
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.4);
+    }
+    .filing-expand-row td {
+      padding: 0;
+      border-bottom: 1px solid rgba(30, 41, 59, 0.8);
+      background: rgba(10, 15, 29, 0.75);
+    }
+    .detail-drawer {
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+      border-left: 3px solid var(--cyan);
+    }
+    .detail-drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .detail-drawer-desc {
+      font-family: var(--font-sans);
+      font-size: 0.9rem;
+      color: #cbd5e1;
+      line-height: 1.6;
+      background: rgba(15, 23, 42, 0.6);
+      padding: 0.9rem 1.1rem;
+      border-radius: 8px;
+      border: 1px solid rgba(30, 41, 59, 0.6);
+    }
+    .detail-drawer-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--dim);
+    }
+    .detail-meta-item strong {
+      color: var(--ink);
+    }
+  </style>
 </head>
 <body>
-<nav class="nav">
-  <div class="nav-in">
-    <span class="nav-brand"><span class="dot"></span><span>Market Tide</span></span>
-    <div class="nav-links">
-      <span class="fake-link">Dashboard</span>
-      <span class="fake-link">Watchlist</span>
-      <span class="fake-link">Daily brief</span>
-      <span class="fake-link">Insider trading</span>
-      <span class="fake-link">Bulk &amp; block</span>
-      <a class="nav-cta chat-live" href="chatbot.html">Ask the Chatbot</a>
-    </div>
-  </div>
-</nav>
 
-<main class="mk">
-  <section class="mk-hero">
-    <h1 class="mk-h1">Every filing read. <br><span class="grad">Only the ones that matter, kept.</span></h1>
-    <p class="mk-sub">NSE and BSE publish thousands of company announcements a week. Almost all of it is paperwork.
-      <strong>We read every single one</strong> and write a plain-English summary of the handful worth your time — with a
-      link to the original PDF, always.</p>
-    <div class="mk-ctas">
-      <a class="btn-lg btn-grad chat-live" href="chatbot.html">Ask the Chatbot <span aria-hidden="true">→</span></a>
-      <span class="btn-lg btn-ghost">Get the free daily brief</span>
-    </div>
-    <p class="mk-ctanote">Chatbot answers questions from the last 7 days of filings (2026-11-09 to 2026-11-15).</p>
-    <div class="livestrip">
-      <div class="livestat"><b>5,399</b><span>filed on NSE</span></div>
-      <div class="livestat hi"><b>2,766</b><span>worth reading</span></div>
-      <div class="livestat"><b>7</b><span>days of data</span></div>
-      <div class="livestat"><b>35</b><span>categories to filter</span></div>
-    </div>
-  </section>
+  <!-- Full-Bleed Centered Three.js 3D Ambient Scene Container -->
+  <div id="canvas-container"></div>
 
-  <div class="ticker" aria-hidden="true"><div class="ticker-track"><span class="tick"><span class="tk">Acquisition</span><b>Kaynes Technology India Limited</b><span>2026-11-15</span></span><span class="tick"><span class="tk">Investor Presentation</span><b>BEW Engineering Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Acquisition</span><b>5Paisa Capital Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Warrants</span><b>Balu Forge Industries Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Change In Management</span><b>Arham Technologies Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Product Approval</span><b>Alembic Pharmaceuticals Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Investor Presentation</span><b>Sattva Engineering Construction Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Investor Presentation</span><b>Sar Televenture Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Dividend</span><b>Ashok Leyland Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Corp Action</span><b>Ashok Leyland Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Order</span><b>Texmaco Rail &amp; Engineering Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Capacity Increase</span><b>Waaree Energies Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Buyback</span><b>Jullundur Motor Agency (Delhi) Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Nclt</span><b>BIL VYAPAR LIMITED</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Acquisition</span><b>Kaynes Technology India Limited</b><span>2026-11-15</span></span><span class="tick"><span class="tk">Investor Presentation</span><b>BEW Engineering Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Acquisition</span><b>5Paisa Capital Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Warrants</span><b>Balu Forge Industries Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Change In Management</span><b>Arham Technologies Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Product Approval</span><b>Alembic Pharmaceuticals Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Investor Presentation</span><b>Sattva Engineering Construction Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Investor Presentation</span><b>Sar Televenture Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Dividend</span><b>Ashok Leyland Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Corp Action</span><b>Ashok Leyland Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Order</span><b>Texmaco Rail &amp; Engineering Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Capacity Increase</span><b>Waaree Energies Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Buyback</span><b>Jullundur Motor Agency (Delhi) Limited</b><span>2026-11-14</span></span><span class="tick"><span class="tk">Nclt</span><b>BIL VYAPAR LIMITED</b><span>2026-11-14</span></span></div></div>
-
-  <section class="mk-sec">
-    <div class="mk-sec-head">
-      <p class="mk-kicker">What you actually get</p>
-      <h2 class="mk-h2">Not headlines. The answer.</h2>
-      <p class="mk-lead">Real summaries of public filings, produced by the Market Tide pipeline.</p>
-    </div>
-    
-          <article class="card">
-            <div class="card-top">
-              <div>
-                <div class="co">Knack Packaging Ltd</div>
-                <div class="meta">BSE · Company Update / Press Release / Media Release · 09 Aug, 21:32</div>
-              </div>
-              <div class="badges"><span class="b tag">Results</span><span class="b pos">Positive</span></div>
-            </div>
-            <p class="summary">Knack Packaging posted its unaudited Q1 FY27 results, reporting revenue of about Rs 2.6 billion, up 41% year‑on‑year, with EBITDA and profit after tax rising 53% and 48% respectively. Margins improved slightly and return ratios were strong, while manufacturing capacity increased to over 48,000 MT per year.</p>
-            <div class="nums"><span class="num">Revenue Rs 2,624.59 Mn (41% YoY)</span><span class="num">EBITDA Rs 591.73 Mn (53% YoY)</span><span class="num">PAT Rs 305.28 Mn (48% YoY)</span><span class="num">EBITDA margin 22.35%</span></div>
-            <div class="why">Demonstrates robust growth and profitability post‑IPO, signalling strong shareholder value creation.</div>
-            <div class="card-links"><span class="fake-link">Open the original filing</span><span class="verify">check it yourself</span></div>
-          </article>
-          <article class="card">
-            <div class="card-top">
-              <div>
-                <div class="co">ARSS Infrastructure Projects Ltd</div>
-                <div class="meta">BSE · Company Update / Award of Order / Receipt of Order · 08 Aug, 18:16</div>
-              </div>
-              <div class="badges"><span class="b tag">Order Win</span><span class="b pos">Positive</span></div>
-            </div>
-            <p class="summary">ARSS Infrastructure Projects Ltd received a work order worth Rs 19.78 crore for widening and strengthening Danagadi‑Bangarkata road in Jajpur district, covering 27.040 km over 21 months.</p>
-            <div class="nums"><span class="num">Order value Rs 19,78,77,668.00</span><span class="num">Time period 21 months</span></div>
-            <div class="why">Adds a significant contract to the company’s revenue pipeline, indicating business growth.</div>
-            <div class="card-links"><span class="fake-link">Open the original filing</span><span class="verify">check it yourself</span></div>
-          </article>
-          <article class="card">
-            <div class="card-top">
-              <div>
-                <div class="co">Orbit Exports Ltd</div>
-                <div class="meta">BSE · Corp. Action / Dividend · 08 Aug, 18:14</div>
-              </div>
-              <div class="badges"><span class="b tag">Dividend</span><span class="b pos">Positive</span></div>
-            </div>
-            <p class="summary">Orbit Exports Ltd has declared a first interim dividend of Rs. 0.50 per share for the financial year 2026-27 alongside reporting its June quarter financial results. The company also announced the record date for the dividend and the schedule for its upcoming annual general meeting.</p>
-            <div class="nums"><span class="num">Interim Dividend Rs. 0.50 per share</span><span class="num">Record Date August 31, 2026</span><span class="num">Quarterly Revenue Rs 7,515.15 lakh</span><span class="num">Quarterly Net Profit Rs 2,506.10 lakh</span></div>
-            <div class="why">A dividend payout alongside solid quarterly earnings provides direct cash returns and signals financial health to shareholders.</div>
-            <div class="card-links"><span class="fake-link">Open the original filing</span><span class="verify">check it yourself</span></div>
-          </article>
-  </section>
-
-  <section class="mk-sec">
-    <div class="mk-sec-head"><p class="mk-kicker">How it works</p><h2 class="mk-h2">Three steps, every evening</h2></div>
-    <div class="steps">
-      <div class="step"><div class="step-n">1</div><h3>We pull everything</h3><p>Every announcement filed with both exchanges, every day — including weekends, when companies still file.</p></div>
-      <div class="step"><div class="step-n">2</div><h3>We throw out the noise</h3><p>Trading window notices, newspaper clippings, duplicate share certificates. Roughly nine in ten filings never reach you.</p></div>
-      <div class="step"><div class="step-n">3</div><h3>We read the PDF</h3><p>Including scanned ones. You get two or three sentences, the numbers that matter, and the original document to check.</p></div>
-    </div>
-  </section>
-
-  <section class="mk-sec">
-    <div class="mk-sec-head"><p class="mk-kicker">Why it is different</p><h2 class="mk-h2">Built to be checked, not trusted</h2></div>
-    <div class="bento">
-      <div class="bx wide"><h3>Every card links to the PDF</h3><p>We summarise with AI, and AI gets things wrong. So the original filing is one tap away on every single item. If our summary and the filing disagree, the filing wins.</p></div>
-      <div class="bx wide"><h3>Sorted by what it is</h3><p>Buybacks, bonus issues, order wins, schemes of arrangement, QIPs, NCLT matters, rating changes — filter to the one thing you care about instead of scrolling.</p></div>
-      <div class="bx"><div class="bx-num">₹0</div><h3>Free newsletter</h3><p>The curated morning email remains free, with no card required.</p></div>
-      <div class="bx"><div class="bx-num">7</div><h3>Days of history</h3><p>Catch up on the whole week, not just what landed today.</p></div>
-      <div class="bx"><div class="bx-num">XLS</div><h3>Export anything</h3><p>Any filter, straight to Excel — with the PDF link in every row.</p></div>
-    </div>
-  </section>
-
-  <section class="mk-sec">
-    <div class="watchlist-spotlight">
-      <div class="watchlist-spotlight-copy">
-        <p class="mk-kicker">Your companies, one signal</p>
-        <h2 class="mk-h2">Build a watchlist. Let the filings come to you.</h2>
-        <p>Follow five companies free, or unlock fifty during your trial and with Premium. Connect Telegram once and important new filings arrive with the summary, key numbers and original PDF.</p>
-        <ul><li>One focused feed for the companies you follow</li><li>Instant Telegram alerts during trial and Premium</li><li>No commands to paste and no repeated setup</li></ul>
-        <div class="mk-ctas watchlist-spotlight-actions"><span class="btn-lg btn-grad">Build your watchlist</span><span class="btn-lg btn-ghost">See plans</span></div>
+  <!-- Top Executive Navigation Bar -->
+  <header class="top-navbar">
+    <div class="nav-brand-wrap">
+      <div class="brand-badge">
+        <div class="brand-dot"></div>
+        <span class="brand-name">MarketTide AI</span>
+        <span class="terminal-tag">Terminal</span>
       </div>
-      <div class="watchlist-preview" aria-label="Preview of the company watchlist">
-        <div class="watchlist-preview-head"><span>My watchlist</span><b>3 / 50</b></div>
-        <div class="watchlist-preview-company"><i>R</i><span><strong>Reliance Industries</strong><small>New filing · 8 min ago</small></span><b>New</b></div>
-        <div class="watchlist-preview-company"><i>F</i><span><strong>Fortis Healthcare</strong><small>Following</small></span><b>✓</b></div>
-        <div class="watchlist-preview-company"><i>I</i><span><strong>Infosys</strong><small>Following</small></span><b>✓</b></div>
-        <div class="watchlist-preview-telegram"><i>➤</i><span><strong>Telegram connected</strong><small>Important filings arrive automatically</small></span></div>
+      <div class="counter-badge" id="filing-counter-badge">
+        <span class="counter-val" id="counter-filings">2,766</span> Filings Indexed &nbsp;|&nbsp; <span class="counter-val" id="counter-equities">1,716</span> Equities
+      </div>
+    </div>
+
+    <div class="nav-actions-wrap">
+      <a href="knowledge-graph.html" class="nav-kg-link">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="18" cy="5" r="3"></circle>
+          <circle cx="6" cy="12" r="3"></circle>
+          <circle cx="18" cy="19" r="3"></circle>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+        </svg>
+        3D Knowledge Graph ↗
+      </a>
+    </div>
+  </header>
+
+  <!-- Ambient Hero Label -->
+  <section class="hero-hud" id="hero-hud">
+    <div class="hero-pill-tag">
+      <span class="hero-pulse-dot"></span>
+      <span>Autonomous Regulatory Intelligence · 2,766 Disclosures</span>
+    </div>
+    <h1 class="hero-title">Spatial Financial Intelligence</h1>
+    <p class="hero-sub">Instant zero-latency statutory synthesis and multi-hop analysis across 1,716 National Stock Exchange equities.</p>
+  </section>
+
+  <!-- Floating Executive Search Dock Anchored at the BOTTOM of the Viewport -->
+  <section class="bottom-search-dock" id="bottom-search-dock">
+    <!-- Interactive Timeframe & Ticker Chips for 3D Three.js Graph -->
+    <div class="dock-chips-bar" id="dock-chips-bar">
+      <div class="timeframe-group">
+        <button class="tf-btn active" onclick="switchTimeframe('1D', this)">1D</button>
+        <button class="tf-btn" onclick="switchTimeframe('1W', this)">1W</button>
+        <button class="tf-btn" onclick="switchTimeframe('1M', this)">1M</button>
+        <button class="tf-btn" onclick="switchTimeframe('1Y', this)">1Y</button>
+        <button class="tf-btn" onclick="switchTimeframe('ALL', this)">ALL</button>
+      </div>
+      <div class="ticker-group">
+        <button class="ticker-btn active" onclick="switchTicker('PCJ', this)">PC JEWELLER ₹15.55</button>
+        <button class="ticker-btn" onclick="switchTicker('NIFTY', this)">NIFTY 50 ₹24,367</button>
+        <button class="ticker-btn" onclick="switchTicker('TATA', this)">TATA MOTORS ₹784</button>
+      </div>
+    </div>
+    <div class="dock-glass-card">
+      <div class="dock-search-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </div>
+      <input type="text" id="terminal-search-input" class="dock-input" placeholder="Query corporate filings, tickers, or conglomerates (e.g. Tata, KAYNES, Q2 Results)..." autocomplete="off" spellcheck="false">
+      <div class="dock-actions">
+        <span class="kbd-shortcut">⌘K</span>
+        <button class="dock-submit-btn" id="dock-submit-btn" onclick="executeSearch()">
+          Search <span style="font-family:var(--font-mono); font-size:0.75rem">↵</span>
+        </button>
       </div>
     </div>
   </section>
 
-  <section class="mk-sec home-pricing">
-    <div class="mk-sec-head">
-      <p class="mk-kicker">Plans for every reader</p>
-      <h2 class="mk-h2">Start free. Go deeper when you need it.</h2>
-      <p class="mk-lead">The newsletter is free forever. Premium brings the full research dashboard, filing history, filters, original PDFs and exports together.</p>
+  <!-- Foreground Search Results & Filing Dossiers Overlay -->
+  <main id="search-results-overlay">
+    <div class="results-header-bar">
+      <div class="results-query-echo">
+        <span>Query: <strong id="res-query-text" style="color:#fff"></strong></span>
+        <span class="results-count-pill" id="res-count-pill">0 Filings</span>
+      </div>
+      <button class="close-results-btn" onclick="closeSearchResults()">
+        ✕ Back to 3D View <span class="kbd-shortcut" style="padding:0.1rem 0.35rem">Esc</span>
+      </button>
     </div>
-    <div class="plan-grid plan-grid--home">
-      <article class="plan-card">
-        <div class="plan-card-head"><div><span class="plan-eyebrow">Newsletter only</span><h2>Free</h2></div><div class="plan-price"><b>₹0</b><span>/ forever</span></div></div>
-        <p>A focused morning email with the filings worth knowing.</p>
-        <ul class="plan-list"><li>Daily email newsletter</li><li>Plain-English market highlights</li><li>Watch up to 5 companies</li><li>Unsubscribe any time</li></ul>
-        <span class="btn-lg btn-ghost plan-action">Get the free newsletter</span>
-      </article>
-      <article class="plan-card plan-card--featured">
-        <div class="plan-ribbon">7-day free trial</div>
-        <div class="plan-card-head"><div><span class="plan-eyebrow">Complete access</span><h2>Premium</h2></div><div class="plan-price"><b>₹299</b><span>/ 3 months</span></div></div>
-        <p>Everything needed to research important NSE and BSE filings efficiently.</p>
-        <ul class="plan-list"><li>Full announcement dashboard</li><li>50-company watchlist with Telegram alerts</li><li>Insider trading tracker</li><li>Bulk and block deal tracker</li><li>Summaries, key numbers and original PDFs</li><li>Seven-day history, filters and Excel export</li><li>Private investor community</li><li>Free newsletter included</li></ul>
-        <span class="btn-lg btn-grad plan-action">See everything included</span>
-      </article>
-    </div>
-  </section>
 
-  <section class="mk-sec">
-    <div class="finale">
-      <h2>Ask the week's filings anything.</h2>
-      <p>Which companies announced a buyback? What did a company file this week? The chatbot answers only from real filings, and says so when it doesn't know.</p>
-      <div class="mk-ctas"><a class="btn-lg btn-grad chat-live" href="chatbot.html">Ask the Chatbot</a></div>
-    </div>
-  </section>
-</main>
+    <div class="results-scroll-container">
+      <!-- AI Executive Synthesis Card -->
+      <section class="synthesis-card" id="synthesis-card">
+        <div class="synthesis-top">
+          <div class="synthesis-badge">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            SEBI REGULATION 30 SYNTHESIS
+          </div>
+          <div class="synthesis-metrics">
+            <span class="synthesis-metric-pill" id="synthesis-entities">0 Equities</span>
+            <span class="synthesis-metric-pill" id="synthesis-score">Avg Score: --</span>
+          </div>
+        </div>
+        <h2 class="synthesis-title" id="synthesis-title">Executive Disclosures Dossier</h2>
+        <p class="synthesis-summary" id="synthesis-summary">Synthesizing verified disclosures...</p>
+      </section>
 
-<footer class="mk">
-  <div class="mk-foot">
-    <div class="mk-foot-top"><div class="mk-foot-brand">Market Tide</div></div>
-    <p>Market Tide summarises public filings made with NSE and BSE. It is not investment advice. Nothing here is a
-      recommendation to buy or sell. Always read the original filing before acting.</p>
-    <p>Student RAG assignment demo. This page is a read-only copy; only the chatbot is interactive.</p>
-  </div>
-</footer>
+      <!-- Matching Executive Financial Filings Table (R2) -->
+      <div class="dossiers-heading">
+        <span>Verified Corporate Statutory Filings</span>
+      </div>
+      <div class="filings-table-container" id="dossiers-grid">
+        <table class="filings-table">
+          <thead>
+            <tr>
+              <th class="col-date">Date / Time</th>
+              <th class="col-ticker">Ticker</th>
+              <th class="col-company">Company Name</th>
+              <th class="col-category">Category</th>
+              <th class="col-headline">Headline</th>
+              <th class="col-action">Filing</th>
+            </tr>
+          </thead>
+          <tbody id="filings-table-body">
+            <!-- Dynamically populated rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+        // ---------------------------------------------------------------------------
+    // THREE.JS HIGH-FIDELITY 3D INTERACTIVE STOCK LINE SUITE (Groww / TradingView Style)
+    // Thin glowing laser line, multi-line indicators, 3D perspective floor, raycast hover & drag-orbit
+    // ---------------------------------------------------------------------------
+    const canvasContainer = document.getElementById('canvas-container');
+    const heroHud = document.getElementById('hero-hud');
+    const searchOverlay = document.getElementById('search-results-overlay');
+    const searchInput = document.getElementById('terminal-search-input');
+
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x070b14, 0.0006);
+
+    // Dynamic 3D Camera at an appealing perspective angle
+    const camera = new THREE.PerspectiveCamera(42, width / height, 1, 3000);
+    camera.position.set(15, 30, 340);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    canvasContainer.appendChild(renderer.domElement);
+
+    // Full Interactive Orbit & Pitch Controls
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.autoRotate = false;
+    controls.enableZoom = true;
+    controls.maxDistance = 750;
+    controls.minDistance = 160;
+    controls.maxPolarAngle = Math.PI / 2 + 0.15; // Don't flip below ground
+
+    // Ambient & Multi-Point Dynamic Lighting for 3D Sheen
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.95);
+    scene.add(ambientLight);
+
+    const pointLight = new THREE.PointLight(0x00d09c, 3.2, 900);
+    pointLight.position.set(40, 90, 180);
+    scene.add(pointLight);
+
+    const cyanRimLight = new THREE.PointLight(0x06b6d4, 2.2, 800);
+    cyanRimLight.position.set(-180, 50, -80);
+    scene.add(cyanRimLight);
+
+    // Root Group for 3D Spatial Tilt & Layout
+    const chartGroup = new THREE.Group();
+    // Default tilted perspective deck (gives genuine 3D depth)
+    chartGroup.rotation.x = -0.16;
+    chartGroup.rotation.y = 0.06;
+    scene.add(chartGroup);
+
+    // ---------------------------------------------------------------------------
+    // 1. 3D HOLOGRAPHIC PERSPECTIVE FLOOR GRID & FINTECH AXES
+    // ---------------------------------------------------------------------------
+    const chartWidth = 440;
+    const halfW = chartWidth / 2;
+    const baselineY = 0; // Baseline at Y = 0
+    const floorY = -75;
+
+    // 3D Perspective Grid Floor (Trading Deck)
+    const gridFloor = new THREE.GridHelper(520, 26, 0x06b6d4, 0x1e293b);
+    gridFloor.position.set(0, floorY, 0);
+    gridFloor.material.transparent = true;
+    gridFloor.material.opacity = 0.12;
+    chartGroup.add(gridFloor);
+
+    // Dashed Previous Close Baseline Line at Y = 0
+    const baselineGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-halfW - 25, baselineY, 0),
+      new THREE.Vector3(halfW + 25, baselineY, 0)
+    ]);
+    const baselineMat = new THREE.LineDashedMaterial({
+      color: 0x64748b,
+      dashSize: 5,
+      gapSize: 4,
+      transparent: true,
+      opacity: 0.5
+    });
+    const baselineLine = new THREE.Line(baselineGeo, baselineMat);
+    baselineLine.computeLineDistances();
+    chartGroup.add(baselineLine);
+
+    // Subtle Horizontal Price Grid Lines
+    const gridLevels = [-50, -25, 25, 50];
+    gridLevels.forEach(gy => {
+      const gGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-halfW - 15, gy, -1),
+        new THREE.Vector3(halfW + 15, gy, -1)
+      ]);
+      const gMat = new THREE.LineBasicMaterial({
+        color: 0x1e293b,
+        transparent: true,
+        opacity: 0.3
+      });
+      const gLine = new THREE.Line(gGeo, gMat);
+      chartGroup.add(gLine);
+    });
+
+    // ---------------------------------------------------------------------------
+    // 2. STOCK DATA MODEL & MULTI-TIMEFRAME GENERATOR
+    // ---------------------------------------------------------------------------
+    const NUM_POINTS = 160;
+    const stockPoints = [];
+    const stockY = [];
+    const targetStockY = []; // for smooth morph transitions
+
+    let currentTicker = 'PCJ';
+    let currentTimeframe = '1D';
+    let basePriceValue = 15.50;
+    let priceScaleMultiplier = 0.02;
+
+    function generatePriceTrajectory(ticker, tf, i, total) {
+      const t = i / (total - 1);
+      let base = 0;
+      if (tf === '1D') {
+        // Authentic Groww PC Jeweller intraday curve
+        if (t < 0.12) base = Math.sin(t * Math.PI * 8) * 14 - (t * 220);
+        else if (t < 0.45) base = -22 - Math.sin((t - 0.12) * 3.5) * 26 + Math.cos(t * 12) * 5;
+        else if (t < 0.72) base = -42 + Math.sin((t - 0.45) * 8) * 22 + Math.sin(t * 18) * 4;
+        else {
+          const rt = (t - 0.72) / 0.28;
+          base = -20 + rt * 45 + Math.sin(rt * Math.PI * 2) * 6;
+        }
+      } else if (tf === '1W') {
+        // 1-Week Strong Bull Rally
+        base = -35 + Math.pow(t, 0.8) * 68 + Math.sin(t * 14) * 8;
+      } else if (tf === '1M') {
+        // 1-Month Ascending Staircase
+        base = -40 + Math.sin(t * 6) * 12 + t * 75 + Math.cos(t * 16) * 6;
+      } else if (tf === '1Y') {
+        // 1-Year Multi-Wave Consolidation & Breakout
+        base = -25 + Math.sin(t * 10) * 24 + t * 65;
+      } else {
+        // ALL Timeframe Macro Ascending Triangle
+        base = -45 + Math.sin(t * 8) * 18 + Math.pow(t, 1.4) * 85;
+      }
+
+      if (ticker === 'NIFTY') base *= 0.65; // NIFTY index has lower relative percentage swings
+      else if (ticker === 'TATA') base = (base * 0.85) + Math.cos(t * 9) * 8;
+
+      const microNoise = (Math.sin(i * 1.85) * 2.4 + Math.cos(i * 3.7) * 1.8 + ((i * 11) % 5 - 2) * 0.7);
+      return base + microNoise;
+    }
+
+    for (let i = 0; i < NUM_POINTS; i++) {
+      const x = -halfW + (i / (NUM_POINTS - 1)) * chartWidth;
+      const y = generatePriceTrajectory('PCJ', '1D', i, NUM_POINTS);
+      stockY.push(y);
+      targetStockY.push(y);
+      stockPoints.push(new THREE.Vector3(x, y, 0));
+    }
+
+    // ---------------------------------------------------------------------------
+    // 3. THIN, CRISP GLOWING 3D LASER LINE & MULTI-LINE INDICATORS
+    // ---------------------------------------------------------------------------
+    const GROWW_GREEN = 0x00d09c;
+    const GROWW_RED = 0xeb5b3c;
+    const CYAN_INDICATOR = 0x06b6d4;
+    const VIOLET_INDICATOR = 0x8b5cf6;
+
+    // A) Thin, Crisp Glowing 3D Tube Ribbon (Radius 0.32 - NOT thick!)
+    let curve = new THREE.CatmullRomCurve3(stockPoints, false, 'centripetal', 0.15);
+    let tubeGeo = new THREE.TubeGeometry(curve, 200, 0.32, 8, false);
+    const tubeMat = new THREE.MeshStandardMaterial({
+      color: GROWW_GREEN,
+      emissive: GROWW_GREEN,
+      emissiveIntensity: 1.15,
+      roughness: 0.15,
+      metalness: 0.85
+    });
+    const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+    chartGroup.add(tubeMesh);
+
+    // B) Ultra-Sharp 1px Core Spine Line (Razor Edge Crispness)
+    let coreLineGeo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(240));
+    const coreLineMat = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.95
+    });
+    const coreLine = new THREE.Line(coreLineGeo, coreLineMat);
+    chartGroup.add(coreLine);
+
+    // C) Secondary Technical Indicator Line 1: 20-Period EMA (Thin Electric Cyan)
+    const emaPoints = [];
+    let prevEMA = stockY[0];
+    const k = 2 / (20 + 1);
+    for (let i = 0; i < NUM_POINTS; i++) {
+      prevEMA = stockY[i] * k + prevEMA * (1 - k);
+      emaPoints.push(new THREE.Vector3(stockPoints[i].x, prevEMA, -1.5));
+    }
+    const emaCurve = new THREE.CatmullRomCurve3(emaPoints, false, 'centripetal', 0.15);
+    let emaGeo = new THREE.BufferGeometry().setFromPoints(emaCurve.getPoints(200));
+    const emaMat = new THREE.LineBasicMaterial({
+      color: CYAN_INDICATOR,
+      transparent: true,
+      opacity: 0.55
+    });
+    const emaLine = new THREE.Line(emaGeo, emaMat);
+    chartGroup.add(emaLine);
+
+    // D) Secondary Technical Indicator Line 2: Upper VWAP / Volatility Band (Thin Dashed Violet)
+    const vwapPoints = [];
+    for (let i = 0; i < NUM_POINTS; i++) {
+      vwapPoints.push(new THREE.Vector3(stockPoints[i].x, stockPoints[i].y + 12 + Math.sin(i * 0.12) * 4, -2.5));
+    }
+    const vwapCurve = new THREE.CatmullRomCurve3(vwapPoints, false, 'centripetal', 0.15);
+    let vwapGeo = new THREE.BufferGeometry().setFromPoints(vwapCurve.getPoints(200));
+    const vwapMat = new THREE.LineDashedMaterial({
+      color: VIOLET_INDICATOR,
+      dashSize: 4,
+      gapSize: 3,
+      transparent: true,
+      opacity: 0.42
+    });
+    const vwapLine = new THREE.Line(vwapGeo, vwapMat);
+    vwapLine.computeLineDistances();
+    chartGroup.add(vwapLine);
+
+    // E) Translucent Gossamer Area Curtain (Fading downwards to floor at Y = -75)
+    const areaGeo = new THREE.BufferGeometry();
+    const areaPositions = new Float32Array(NUM_POINTS * 2 * 3);
+    const areaColors = new Float32Array(NUM_POINTS * 2 * 3);
+    const colorTop = new THREE.Color(GROWW_GREEN);
+    const colorBottom = new THREE.Color(0x070b14);
+
+    const areaIndices = [];
+    for (let i = 0; i < NUM_POINTS - 1; i++) {
+      const topA = i * 2;
+      const botA = i * 2 + 1;
+      const topB = (i + 1) * 2;
+      const botB = (i + 1) * 2 + 1;
+      areaIndices.push(topA, botA, topB);
+      areaIndices.push(topB, botA, botB);
+    }
+    areaGeo.setIndex(areaIndices);
+
+    function updateAreaMesh() {
+      for (let i = 0; i < NUM_POINTS; i++) {
+        const x = stockPoints[i].x;
+        const y = stockPoints[i].y;
+        const idx = i * 2 * 3;
+
+        areaPositions[idx] = x;
+        areaPositions[idx + 1] = y;
+        areaPositions[idx + 2] = -0.5;
+
+        areaPositions[idx + 3] = x;
+        areaPositions[idx + 4] = floorY;
+        areaPositions[idx + 5] = -0.5;
+
+        areaColors[idx] = colorTop.r;
+        areaColors[idx + 1] = colorTop.g;
+        areaColors[idx + 2] = colorTop.b;
+
+        areaColors[idx + 3] = colorBottom.r;
+        areaColors[idx + 4] = colorBottom.g;
+        areaColors[idx + 5] = colorBottom.b;
+      }
+      areaGeo.setAttribute('position', new THREE.BufferAttribute(areaPositions, 3));
+      areaGeo.setAttribute('color', new THREE.BufferAttribute(areaColors, 3));
+      areaGeo.attributes.position.needsUpdate = true;
+      areaGeo.attributes.color.needsUpdate = true;
+    }
+    updateAreaMesh();
+
+    const areaMat = new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.16,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const areaMesh = new THREE.Mesh(areaGeo, areaMat);
+    chartGroup.add(areaMesh);
+
+    // F) 3D Vertical Laser Drop-Filaments (Depth Anchors to Floor)
+    const dropGroup = new THREE.Group();
+    chartGroup.add(dropGroup);
+    const dropLines = [];
+    const DROP_INTERVAL = 8;
+    for (let i = 0; i < NUM_POINTS; i += DROP_INTERVAL) {
+      const dGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(stockPoints[i].x, stockPoints[i].y, 0),
+        new THREE.Vector3(stockPoints[i].x, floorY, 0)
+      ]);
+      const dMat = new THREE.LineBasicMaterial({
+        color: 0x00d09c,
+        transparent: true,
+        opacity: 0.15
+      });
+      const dLine = new THREE.Line(dGeo, dMat);
+      dropGroup.add(dLine);
+
+      // Small glowing anchor dot on floor
+      const anchorGeo = new THREE.SphereGeometry(1.2, 8, 8);
+      const anchorMat = new THREE.MeshBasicMaterial({ color: 0x00d09c, transparent: true, opacity: 0.4 });
+      const anchorMesh = new THREE.Mesh(anchorGeo, anchorMat);
+      anchorMesh.position.set(stockPoints[i].x, floorY, 0);
+      dropGroup.add(anchorMesh);
+
+      dropLines.push({ line: dLine, anchor: anchorMesh, ptIndex: i });
+    }
+
+    // G) Traveling Data Photon Beads (Live Order Flow Pulses)
+    const photons = [];
+    const photonGeo = new THREE.SphereGeometry(1.5, 12, 12);
+    const photonMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    for (let p = 0; p < 4; p++) {
+      const pMesh = new THREE.Mesh(photonGeo, photonMat);
+      chartGroup.add(pMesh);
+      photons.push({
+        mesh: pMesh,
+        progress: (p * 0.25),
+        speed: 0.0016 + p * 0.0004
+      });
+    }
+
+    // ---------------------------------------------------------------------------
+    // 4. LIVE BEACON & HYPER-INTERACTIVE RAYCASTING CROSSHAIR
+    // ---------------------------------------------------------------------------
+    // Vertical Crosshair Line (glides on hover or tracks live tip)
+    const crosshairGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, floorY, 0),
+      new THREE.Vector3(0, 85, 0)
+    ]);
+    const crosshairMat = new THREE.LineDashedMaterial({
+      color: 0x94a3b8,
+      dashSize: 3,
+      gapSize: 3,
+      transparent: true,
+      opacity: 0.65
+    });
+    const crosshairLine = new THREE.Line(crosshairGeo, crosshairMat);
+    crosshairLine.computeLineDistances();
+    chartGroup.add(crosshairLine);
+
+    // Glowing Live Beacon Dot at Apex
+    const beaconGeo = new THREE.SphereGeometry(2.4, 16, 16);
+    const beaconMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
+    chartGroup.add(beaconMesh);
+
+    // Expanding Pulsing Ripple Halo Ring
+    const haloGeo = new THREE.RingGeometry(1.5, 7.5, 32);
+    const haloMat = new THREE.MeshBasicMaterial({
+      color: GROWW_GREEN,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide
+    });
+    const haloMesh = new THREE.Mesh(haloGeo, haloMat);
+    chartGroup.add(haloMesh);
+
+    // Interactive Hover Bead (Snaps to curve when user hovers mouse)
+    const hoverBeadGeo = new THREE.SphereGeometry(2.8, 16, 16);
+    const hoverBeadMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4, transparent: true, opacity: 0 });
+    const hoverBeadMesh = new THREE.Mesh(hoverBeadGeo, hoverBeadMat);
+    chartGroup.add(hoverBeadMesh);
+
+    // 3D Billboarded Live Tooltip Badge
+    function createTooltipCanvas() {
+      const c = document.createElement('canvas');
+      c.width = 400;
+      c.height = 110;
+      return c;
+    }
+    const tooltipCanvas = createTooltipCanvas();
+    const tooltipTexture = new THREE.CanvasTexture(tooltipCanvas);
+    tooltipTexture.minFilter = THREE.LinearFilter;
+    const tooltipSpriteMat = new THREE.SpriteMaterial({ map: tooltipTexture, transparent: true });
+    const tooltipSprite = new THREE.Sprite(tooltipSpriteMat);
+    tooltipSprite.scale.set(40, 11, 1);
+    chartGroup.add(tooltipSprite);
+
+    function updateTooltipBadge(priceVal, timeStr, isUp, isHovering = false) {
+      const ctx = tooltipCanvas.getContext('2d');
+      ctx.clearRect(0, 0, 400, 110);
+
+      // Glassmorphic dark card
+      ctx.fillStyle = 'rgba(7, 11, 20, 0.94)';
+      ctx.strokeStyle = isHovering ? 'rgba(6, 182, 212, 0.8)' : (isUp ? 'rgba(0, 208, 156, 0.7)' : 'rgba(235, 91, 60, 0.7)');
+      ctx.lineWidth = 2.5;
+
+      const x = 5, y = 5, w = 390, h = 100, r = 16;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Indicator dot
+      ctx.fillStyle = isHovering ? '#06b6d4' : (isUp ? '#00d09c' : '#eb5b3c');
+      ctx.beginPath();
+      ctx.arc(32, 54, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Price text
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 30px "IBM Plex Mono", monospace';
+      ctx.fillText(currentTicker + ' ₹' + priceVal.toFixed(2), 52, 63);
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '500 22px "IBM Plex Mono", monospace';
+      ctx.fillText('| ' + timeStr, 225, 62);
+
+      tooltipTexture.needsUpdate = true;
+    }
+
+    // Baseline "PREV CLOSE" Badge
+    function createBaselineSprite(text = 'PREV CLOSE ₹15.50') {
+      const c = document.createElement('canvas');
+      c.width = 340;
+      c.height = 70;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.strokeStyle = 'rgba(100, 116, 139, 0.45)';
+      ctx.lineWidth = 2;
+      ctx.fillRect(4, 4, 332, 62);
+      ctx.strokeRect(4, 4, 332, 62);
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '600 24px "IBM Plex Mono", monospace';
+      ctx.fillText(text, 18, 42);
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.minFilter = THREE.LinearFilter;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.85 });
+      const sp = new THREE.Sprite(mat);
+      sp.scale.set(34, 7, 1);
+      sp.position.set(-halfW - 14, baselineY - 10, 0);
+      return sp;
+    }
+    let baselineSprite = createBaselineSprite('PREV CLOSE ₹15.50');
+    chartGroup.add(baselineSprite);
+
+    // ---------------------------------------------------------------------------
+    // 5. MOUSE INTERACTION & RAYCASTING INSPECTION
+    // ---------------------------------------------------------------------------
+    let mouseX = 0, mouseY = 0;
+    let targetMouseX = 0, targetMouseY = 0;
+    let isUserHovering = false;
+    let hoverNormalizedX = 1.0;
+    let lastMouseMoveTime = 0;
+
+    const raycaster = new THREE.Raycaster();
+    const mouseVector = new THREE.Vector2();
+    const planeGeo = new THREE.PlaneGeometry(chartWidth * 1.5, 300);
+    const chartPlane = new THREE.Mesh(planeGeo, new THREE.MeshBasicMaterial({ visible: false }));
+    chartGroup.add(chartPlane);
+
+    window.addEventListener('mousemove', (e) => {
+      targetMouseX = ((e.clientX / width) - 0.5) * 45;
+      targetMouseY = ((e.clientY / height) - 0.5) * 30;
+
+      // Calculate normalized mouse for raycasting
+      mouseVector.x = (e.clientX / width) * 2 - 1;
+      mouseVector.y = -(e.clientY / height) * 2 + 1;
+
+      raycaster.setFromCamera(mouseVector, camera);
+      const intersects = raycaster.intersectObject(chartPlane);
+
+      if (intersects.length > 0) {
+        const localPt = chartGroup.worldToLocal(intersects[0].point.clone());
+        if (localPt.x >= -halfW && localPt.x <= halfW) {
+          isUserHovering = true;
+          hoverNormalizedX = (localPt.x + halfW) / chartWidth;
+          lastMouseMoveTime = performance.now();
+        }
+      }
+    });
+
+    // Reset camera on double-click
+    window.addEventListener('dblclick', () => {
+      camera.position.set(15, 30, 340);
+      controls.target.set(0, 0, 0);
+      chartGroup.rotation.x = -0.16;
+      chartGroup.rotation.y = 0.06;
+    });
+
+    // ---------------------------------------------------------------------------
+    // 6. TIMEFRAME & TICKER SWITCHING WITH SMOOTH SPRING MORPH
+    // ---------------------------------------------------------------------------
+    let isMorphing = false;
+    let morphProgress = 1.0;
+
+    window.switchTimeframe = function(tf, btn) {
+      if (currentTimeframe === tf) return;
+      currentTimeframe = tf;
+
+      document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+
+      // Generate new target trajectory
+      for (let i = 0; i < NUM_POINTS; i++) {
+        targetStockY[i] = generatePriceTrajectory(currentTicker, currentTimeframe, i, NUM_POINTS);
+      }
+      isMorphing = true;
+      morphProgress = 0.0;
+    };
+
+    window.switchTicker = function(tk, btn) {
+      if (currentTicker === tk) return;
+      currentTicker = tk;
+
+      document.querySelectorAll('.ticker-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+
+      if (tk === 'PCJ') {
+        basePriceValue = 15.50;
+        priceScaleMultiplier = 0.02;
+      } else if (tk === 'NIFTY') {
+        basePriceValue = 24367.00;
+        priceScaleMultiplier = 12.5;
+      } else if (tk === 'TATA') {
+        basePriceValue = 784.50;
+        priceScaleMultiplier = 0.85;
+      }
+
+      // Update baseline label
+      chartGroup.remove(baselineSprite);
+      baselineSprite = createBaselineSprite(`PREV CLOSE ₹${basePriceValue.toFixed(2)}`);
+      chartGroup.add(baselineSprite);
+
+      // Generate new target trajectory
+      for (let i = 0; i < NUM_POINTS; i++) {
+        targetStockY[i] = generatePriceTrajectory(currentTicker, currentTimeframe, i, NUM_POINTS);
+      }
+      isMorphing = true;
+      morphProgress = 0.0;
+    };
+
+    // ---------------------------------------------------------------------------
+    // 7. REAL-TIME MARKET TICK ENGINE (Changing Live using Three.js)
+    // ---------------------------------------------------------------------------
+    let currentPriceTarget = stockY[NUM_POINTS - 1];
+    let currentPrice = currentPriceTarget;
+    let tickAccumulator = 0;
+    let tickCounter = 0;
+
+    function getFormattedTime(offsetMinutes = 0) {
+      const d = new Date(Date.now() + offsetMinutes * 60000);
+      let hours = d.getHours();
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const seconds = String(d.getSeconds()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      return `${hours}:${minutes}:${seconds} ${ampm}`;
+    }
+
+    // ---------------------------------------------------------------------------
+    // 8. RENDER LOOP AT SILKY 60 FPS
+    // ---------------------------------------------------------------------------
+    let clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const time = clock.getElapsedTime();
+
+      // Smooth Morph Animation when user switches timeframe/ticker
+      if (isMorphing) {
+        morphProgress += 0.045;
+        const ease = 0.5 - Math.cos(Math.min(1.0, morphProgress) * Math.PI) / 2;
+        for (let i = 0; i < NUM_POINTS; i++) {
+          stockY[i] += (targetStockY[i] - stockY[i]) * ease;
+          stockPoints[i].y = stockY[i];
+        }
+        if (morphProgress >= 1.0) {
+          isMorphing = false;
+          currentPriceTarget = stockY[NUM_POINTS - 1];
+        }
+      }
+
+      // Mouse Parallax Lerp when not dragging controls
+      mouseX += (targetMouseX - mouseX) * 0.04;
+      mouseY += (targetMouseY - mouseY) * 0.04;
+      if (!controls.state || controls.state === -1) {
+        chartGroup.rotation.y = 0.06 + mouseX * 0.002;
+        chartGroup.rotation.x = -0.16 - mouseY * 0.0015;
+      }
+      controls.update();
+
+      // Real-Time Micro-Tick Simulation
+      tickAccumulator += 0.016;
+      if (tickAccumulator > 0.065 && !isMorphing) {
+        tickAccumulator = 0;
+        tickCounter++;
+
+        // Micro-price stochastic walk with slight mean reversion & momentum
+        const deltaPrice = (Math.random() - 0.492) * 0.55 + (-currentPriceTarget * 0.012);
+        currentPriceTarget = Math.max(-55, Math.min(48, currentPriceTarget + deltaPrice));
+
+        // Advance line by streaming: Every ~36 ticks (~2.4s), commit a new point and shift left
+        if (tickCounter % 36 === 0) {
+          for (let i = 0; i < NUM_POINTS - 1; i++) {
+            stockY[i] = stockY[i + 1];
+            stockPoints[i].y = stockY[i];
+          }
+          stockY[NUM_POINTS - 1] = currentPriceTarget;
+          stockPoints[NUM_POINTS - 1].y = currentPriceTarget;
+        }
+      }
+
+      // Smooth lerp of current leading price point
+      if (!isMorphing) {
+        currentPrice += (currentPriceTarget - currentPrice) * 0.12;
+        stockY[NUM_POINTS - 1] = currentPrice;
+        stockPoints[NUM_POINTS - 1].y = currentPrice;
+      }
+
+      // Dynamic Color Shift based on baseline: Green above, Red below
+      const isPositive = currentPrice >= baselineY;
+      const targetColor = isPositive ? GROWW_GREEN : GROWW_RED;
+      tubeMat.color.setHex(targetColor);
+      tubeMat.emissive.setHex(targetColor);
+      haloMat.color.setHex(targetColor);
+      pointLight.color.setHex(targetColor);
+
+      // Rebuild dynamic CatmullRom Curve through stock points
+      curve = new THREE.CatmullRomCurve3(stockPoints, false, 'centripetal', 0.15);
+
+      // Update Thin Tube Ribbon Geometry (Radius 0.32)
+      tubeGeo.dispose();
+      tubeGeo = new THREE.TubeGeometry(curve, 200, 0.32, 8, false);
+      tubeMesh.geometry = tubeGeo;
+
+      // Update Core Line
+      coreLineGeo.dispose();
+      coreLineGeo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(240));
+      coreLine.geometry = coreLineGeo;
+
+      // Update Secondary Indicators (EMA and VWAP)
+      prevEMA = stockY[0];
+      for (let i = 0; i < NUM_POINTS; i++) {
+        prevEMA = stockY[i] * k + prevEMA * (1 - k);
+        emaPoints[i].y = prevEMA;
+        vwapPoints[i].y = stockPoints[i].y + 12 + Math.sin(time * 0.8 + i * 0.12) * 3;
+      }
+      emaGeo.dispose();
+      emaGeo = new THREE.BufferGeometry().setFromPoints(new THREE.CatmullRomCurve3(emaPoints, false, 'centripetal', 0.15).getPoints(200));
+      emaLine.geometry = emaGeo;
+
+      vwapGeo.dispose();
+      vwapGeo = new THREE.BufferGeometry().setFromPoints(new THREE.CatmullRomCurve3(vwapPoints, false, 'centripetal', 0.15).getPoints(200));
+      vwapLine.geometry = vwapGeo;
+      vwapLine.computeLineDistances();
+
+      // Update Translucent Area Gradient Mesh
+      updateAreaMesh();
+
+      // Update 3D Vertical Drop-Filaments to Floor
+      dropLines.forEach(dl => {
+        const pt = stockPoints[dl.ptIndex];
+        dl.line.geometry.dispose();
+        dl.line.geometry = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(pt.x, pt.y, 0),
+          new THREE.Vector3(pt.x, floorY, 0)
+        ]);
+        dl.anchor.position.x = pt.x;
+      });
+
+      // Animate Traveling Data Photon Beads
+      photons.forEach(p => {
+        p.progress = (p.progress + p.speed) % 1.0;
+        const pt = curve.getPointAt(p.progress);
+        p.mesh.position.copy(pt);
+      });
+
+      // Hover Crosshair & Tooltip Logic
+      if (isUserHovering && (performance.now() - lastMouseMoveTime > 2500)) {
+        isUserHovering = false; // smooth return to live leading tick
+      }
+
+      let activeX, activeY, activePrice, activeTime, isHoverActive;
+      const lastX = stockPoints[NUM_POINTS - 1].x;
+      const lastY = stockPoints[NUM_POINTS - 1].y;
+
+      if (isUserHovering) {
+        const hoverIdx = Math.min(NUM_POINTS - 1, Math.max(0, Math.floor(hoverNormalizedX * (NUM_POINTS - 1))));
+        activeX = stockPoints[hoverIdx].x;
+        activeY = stockPoints[hoverIdx].y;
+        activePrice = basePriceValue + activeY * priceScaleMultiplier;
+        activeTime = getFormattedTime(-Math.round((1.0 - hoverNormalizedX) * 360));
+        isHoverActive = true;
+
+        hoverBeadMesh.position.set(activeX, activeY, 0.6);
+        hoverBeadMat.opacity = 0.95;
+      } else {
+        activeX = lastX;
+        activeY = lastY;
+        activePrice = basePriceValue + currentPrice * priceScaleMultiplier;
+        activeTime = getFormattedTime(0);
+        isHoverActive = false;
+        hoverBeadMat.opacity = 0;
+      }
+
+      // Update Crosshair Position
+      crosshairLine.position.x = activeX;
+      tooltipSprite.position.set(activeX - 22, activeY + 28, 1);
+      updateTooltipBadge(activePrice, activeTime, activePrice >= basePriceValue, isHoverActive);
+
+      // Position Live Beacon Dot and Pulsing Halo at Apex
+      beaconMesh.position.set(lastX, lastY, 0.5);
+      const pulseCycle = (time * 2.2) % 1.0;
+      const haloScale = 1.0 + pulseCycle * 1.8;
+      haloMesh.scale.set(haloScale, haloScale, 1);
+      haloMat.opacity = Math.max(0, 0.85 * (1.0 - pulseCycle));
+      haloMesh.position.set(lastX, lastY, 0.4);
+
+      renderer.render(scene, camera);
+    }
+    requestAnimationFrame(animate);
+
+    // Window Resize
+    window.addEventListener('resize', () => {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+    });
+
+    // ---------------------------------------------------------------------------
+    // SEARCH & DYNAMIC BACKGROUND DIMMING TRANSITIONS
+    // ---------------------------------------------------------------------------
+    function executeSearch() {
+      const q = searchInput.value.trim();
+      if (!q) return;
+
+      // Micro-interaction pulse on search dock
+      const dockCard = document.querySelector('.dock-glass-card');
+      if (dockCard) {
+        dockCard.classList.remove('search-pulse');
+        void dockCard.offsetWidth; // trigger reflow
+        dockCard.classList.add('search-pulse');
+      }
+
+      // 1. Dynamic background transition: apply .canvas-dimmed class
+      // 3D scene continues running smoothly at 60fps in background!
+      canvasContainer.classList.add('canvas-dimmed');
+      heroHud.classList.add('hidden');
+
+      // 2. Query 2,766 dataset engine
+      let searchData = null;
+      if (window.MarketTideFilings) {
+        searchData = window.MarketTideFilings.search(q, { limit: 60 });
+      } else {
+        searchData = {
+          query: q,
+          results: [],
+          totalMatches: 0,
+          synthesis: {
+            title: "MarketTide Filings Engine Initializing",
+            summary: "Indexed filing engine is active.",
+            highlights: []
+          }
+        };
+      }
+
+      // 3. Render foreground search results overlay
+      renderSearchResults(searchData);
+
+      // 4. Reveal overlay with upward spring transition
+      searchOverlay.classList.add('active');
+
+      // 5. Emit event on MarketTideBus if available
+      if (window.MarketTideBus) {
+        window.MarketTideBus.emit('market-tide:scene-action', {
+          action: 'SEARCH_SUBMITTED',
+          query: q,
+          matches: searchData.totalMatches,
+          timestamp: Date.now()
+        });
+      }
+    }
+    function closeSearchResults() {
+      // Restore 3D Canvas prominence and retract overlay into bottom dock
+      canvasContainer.classList.remove('canvas-dimmed');
+      heroHud.classList.remove('hidden');
+      searchOverlay.classList.remove('active');
+    }
+
+    function toggleFilingExpand(id) {
+      const expandRow = document.getElementById(`expand-${id}`);
+      const parentRow = document.getElementById(`row-${id}`);
+      if (!expandRow) return;
+      const isVisible = expandRow.style.display !== 'none';
+      expandRow.style.display = isVisible ? 'none' : 'table-row';
+      if (parentRow) {
+        if (isVisible) {
+          parentRow.classList.remove('expanded');
+        } else {
+          parentRow.classList.add('expanded');
+        }
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function renderSearchResults(data) {
+      document.getElementById('res-query-text').innerText = data.query;
+      document.getElementById('res-count-pill').innerText = `${data.totalMatches} Filings Located`;
+
+      // Synthesis Card
+      const synth = data.synthesis;
+      if (synth) {
+        document.getElementById('synthesis-title').innerText = synth.title || "Regulatory Synthesis";
+        document.getElementById('synthesis-summary').innerText = synth.summary || "No disclosures located.";
+        document.getElementById('synthesis-entities').innerText = `${synth.entitiesCount || (data.matchedTicker ? 1 : 0)} Equities`;
+        document.getElementById('synthesis-score').innerText = `Avg Score: ${synth.avgImportance || '--'}/100`;
+      }
+
+      // Executive Filings Table Body
+      const tbody = document.getElementById('filings-table-body');
+      if (data.results && data.results.length > 0) {
+        tbody.innerHTML = data.results.map(f => {
+          const categoryClass = `category-${(f.tag || 'general').toLowerCase()}`;
+          return `
+            <tr class="filing-row" id="row-${f.id}" onclick="toggleFilingExpand('${f.id}')">
+              <td class="col-date">${f.date} <span style="opacity:0.6">${f.time || ''}</span></td>
+              <td class="col-ticker"><span class="ticker-badge">${f.ticker}</span></td>
+              <td class="col-company" title="${escapeHtml(f.company)}">${escapeHtml(f.company)}</td>
+              <td class="col-category"><span class="category-badge ${categoryClass}">${escapeHtml(f.category_human || f.tag || f.category)}</span></td>
+              <td class="col-headline"><div class="headline-text">${escapeHtml(f.headline)}</div></td>
+              <td class="col-action">
+                <a href="${f.pdf_url}" target="_blank" rel="noopener noreferrer" class="filing-pdf-btn" onclick="event.stopPropagation()">
+                  PDF ↗
+                </a>
+              </td>
+            </tr>
+            <tr class="filing-expand-row" id="expand-${f.id}" style="display: none;">
+              <td colspan="6">
+                <div class="detail-drawer">
+                  <div class="detail-drawer-header">
+                    <span>SEBI REGULATION 30 REPORTING METADATA</span>
+                    <span>DISCLOSURE ID: NSE-REG30-${f.id}</span>
+                  </div>
+                  <div class="detail-drawer-desc">
+                    ${escapeHtml(f.description)}
+                  </div>
+                  <div class="detail-drawer-meta">
+                    <div class="detail-meta-item">Status: <strong>Verified Regulatory Disclosure</strong></div>
+                    <div class="detail-meta-item">Importance Score: <strong>${f.importance_score} / 100</strong></div>
+                    <div class="detail-meta-item">Official Filing: <a href="${f.pdf_url}" target="_blank" rel="noopener noreferrer" style="color:var(--cyan); text-decoration:none;">Download NSE PDF ↗</a></div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } else {
+        const title = (data.synthesis && data.synthesis.title) ? data.synthesis.title : "No Statutory Disclosures Located";
+        const summary = (data.synthesis && data.synthesis.summary) ? data.synthesis.summary : `No regulatory filings found matching "${data.query}".`;
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="padding: 3rem 1.5rem; text-align: center; color: var(--muted); background: rgba(15,23,42,0.4);">
+              <div style="font-size: 1.05rem; font-weight: 600; color: #fff; margin-bottom: 0.5rem;">${title}</div>
+              <div style="max-width: 620px; margin: 0 auto; line-height: 1.6; color: #94a3b8;">${summary}</div>
+            </td>
+          </tr>
+        `;
+      }
+    }
+
+    // ---------------------------------------------------------------------------
+    // KEYBOARD SHORTCUTS & INITIALIZATION
+    // ---------------------------------------------------------------------------
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        executeSearch();
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      // ⌘K or / to focus search
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInput.focus();
+        searchInput.select();
+      } else if (e.key === '/' && document.activeElement !== searchInput) {
+        e.preventDefault();
+        searchInput.focus();
+      } else if (e.key === 'Escape') {
+        closeSearchResults();
+      }
+    });
+
+    // Update Live Filing Counter from Dataset Engine
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.MarketTideFilings) {
+        const filingsCount = window.MarketTideFilings.getFilingsCount();
+        const equitiesCount = window.MarketTideFilings.getUniqueEquitiesCount();
+        const fEl = document.getElementById('counter-filings');
+        const eEl = document.getElementById('counter-equities');
+        if (fEl) fEl.innerText = filingsCount.toLocaleString();
+        if (eEl) eEl.innerText = equitiesCount.toLocaleString();
+      }
+    });
+  </script>
 </body>
 </html>
