@@ -11,8 +11,10 @@ from dotenv import load_dotenv
 
 try:
     from .tools import MarketTools, STOPWORDS, DISALLOWED_SINGLE_WORDS, CORPORATE_INDICATORS
+    from . import grounding
 except ImportError:
     from tools import MarketTools, STOPWORDS, DISALLOWED_SINGLE_WORDS, CORPORATE_INDICATORS
+    import grounding
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -199,6 +201,7 @@ class MarketTideAgent:
     def __init__(self):
         self.tools = MarketTools()
         self.client = None
+        self.last_result = None          # grounding.Result of the latest answered question (for the UI trace)
         if GROQ_API_KEY:
             try:
                 from groq import Groq
@@ -484,7 +487,7 @@ class MarketTideAgent:
 
         if intent == "CATEGORY":
             cat = entities.get("category", "")
-            docs = self.tools.filter_by_category(cat, min_score=45, top_k=6)
+            docs = self.tools.filter_by_category(cat, min_score=45, top_k=grounding.MAX_EVIDENCE)
             return docs, f"category:{cat}"
 
         if intent == "TOP_FILINGS":
@@ -562,6 +565,7 @@ class MarketTideAgent:
         """Stream response tokens in real-time, yielding chunks for st.write_stream."""
         if chat_history is None:
             chat_history = []
+        self.last_result = None
 
         # 1. Intent recognition & entity extraction
         intent_data = self.classify_intent_and_entities(query)
@@ -678,48 +682,30 @@ class MarketTideAgent:
                     yield word + " "
             return msg_gen(), docs, tool_context
 
-        # 5. Format prompt and call LLM with streaming
-        system_prompt, user_prompt = self.format_prompt(query, docs, tool_context, chat_history)
+        # 5. Grounded answer (MedEvolv Mentor pattern): numbered evidence -> temperature-0 draft that must cite
+        #    every claim -> deterministic fact check -> one validated rewrite or drop the failing sentences ->
+        #    decline if nothing verified remains. The whole answer is checked BEFORE anything is shown.
+        facts = []
+        if intent_data["intent"] == "CATEGORY":
+            cat = intent_data.get("entities", {}).get("category", "")
+            total = len(self.tools.filter_by_category(cat, min_score=45, top_k=100000))
+            shown = min(len(docs), grounding.MAX_EVIDENCE)
+            if total > shown:
+                facts.append(f"{total} filings in the database match '{cat}' (importance score 45 or more). "
+                             f"Only the {shown} most important are given as passages here, so any list built from "
+                             f"them shows {shown} of {total}.")
+        # A bare name ("Tata", "Kaynes Tech") is not a question; the strict prompt would rightly call it
+        # unanswerable. It means "what did this company/group announce?", so ask exactly that.
+        llm_query = query
+        if intent_data["intent"] == "COMPANY" and len(query.split()) <= 3 and not query.rstrip().endswith("?"):
+            llm_query = f"What did {query.strip()} announce in these filings? Summarise each filing in one bullet."
+        result = grounding.answer(self.client, llm_query, docs, chat_history, facts)
+        self.last_result = result
+        shown_docs = [e.doc for e in result.evidence if e.doc is not None]
 
-        if self.client:
-            models_to_try = ["openai/gpt-oss-20b", "qwen/qwen3.8-27b", "openai/gpt-oss-120b"]
-            for model_name in models_to_try:
-                try:
-                    stream = self.client.chat.completions.create(
-                        model=model_name,
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt}
-                        ],
-                        temperature=0.1,
-                        max_tokens=800,
-                        stream=True
-                    )
-                    
-                    def stream_generator():
-                        for chunk in stream:
-                            if chunk.choices and chunk.choices[0].delta.content:
-                                yield chunk.choices[0].delta.content
+        def verified_stream():
+            for piece in re.split(r"(\s+)", result.text):
+                if piece:
+                    yield piece
 
-                    return stream_generator(), docs, tool_context
-                except Exception as e:
-                    print(f"Streaming error on {model_name}: {e}")
-                    continue
-
-        # Fallback local generator if API offline
-        def fallback_generator():
-            # Safeguard: Verify that retrieved docs genuinely match the requested entity
-            resolved = intent_data.get("entities", {}).get("resolved", [])
-            if resolved:
-                target_ticker = resolved[0].get("ticker", "").upper()
-                if not any(d.get("ticker", "").upper() == target_ticker for d in docs):
-                    yield f"**No Matching Announcements Found**\n\n"
-                    yield f"No announcements were published by **{resolved[0]['company']} ({target_ticker})** on the NSE during the 7-day snapshot window (**09-Nov-2026 to 15-Nov-2026**).\n"
-                    return
-
-            yield f"### Market Tide Intelligence Briefing ({len(docs)} filings)\n\n"
-            for d in docs:
-                yield f"- **{d['company']} ({d['ticker']})** [{d['date']}] — *{d['category']}*\n"
-                yield f"  {d['headline']}\n\n"
-        
-        return fallback_generator(), docs, tool_context
+        return verified_stream(), shown_docs, tool_context

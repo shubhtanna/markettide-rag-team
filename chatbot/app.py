@@ -21,6 +21,13 @@ import html
 import streamlit as st
 import pandas as pd
 
+# Windows consoles default to cp1252, which crashes on the "✓" progress prints. Force UTF-8 output.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Path setup
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, CURRENT_DIR)
@@ -604,7 +611,7 @@ def render_process(steps: list, total_ms: float) -> str:
         f'<div class="mm-pills">'
         f'<span class="mm-pill info">{len(steps)} steps</span>'
         f'<span class="mm-pill info">1 search</span>'
-        f'<span class="mm-pill info">1 model call</span>'
+        f'<span class="mm-pill info">{sum(1 for x in steps if x.get("stage") in ("llm", "repair") and "No language model" not in x.get("title", ""))} model call(s)</span>'
         f'<span class="mm-pill info">{total_ms / 1000:.2f} s total</span>'
         f'</div>'
     )
@@ -639,28 +646,76 @@ def render_process(steps: list, total_ms: float) -> str:
     html_out.append('</ol>')
     return "".join(html_out)
 
-def render_sources_html(sources: list) -> str:
-    """Render cited source cards with PDF links."""
+def scroll_to_latest_question() -> None:
+    """Streamlit doesn't scroll to new chat output by itself. Scroll the page so the latest question sits at the top
+    of the view and its answer is directly below it. Runs in a zero-height component; retries briefly while Streamlit
+    finishes laying the page out."""
+    import streamlit.components.v1 as components
+    components.html(
+        f"""<script>
+        (function () {{
+          const doc = window.parent.document;
+          let tries = 0;
+          const go = () => {{
+            const marks = doc.querySelectorAll('.mt-q-anchor');
+            if (!marks.length) return;
+            const msg = marks[marks.length - 1].closest('[data-testid="stChatMessage"]') || marks[marks.length - 1];
+            msg.scrollIntoView({{ behavior: tries ? 'auto' : 'smooth', block: 'start' }});
+          }};
+          const t = setInterval(() => {{ go(); if (++tries >= 6) clearInterval(t); }}, 200);
+        }})();
+        </script><!-- {time.time()} -->""",
+        height=0,
+    )
+
+
+def status_pill_html(tool_context: str, is_refusal: bool, status: str) -> str:
+    """Status shown above every answer, driven by what the pipeline actually did."""
+    ctx = tool_context or ""
+    if any(k in ctx for k in ("out_of_domain", "subjective_opinion", "non_nse", "out_of_window")):
+        return '<span class="mm-pill bad">Declined · out of scope</span>'
+    if is_refusal:
+        return '<span class="mm-pill warn">Declined · not in 7-day database</span>'
+    if status == "repaired":
+        return '<span class="mm-pill good">Grounded answer · fixed after fact check</span>'
+    if status == "trimmed":
+        return '<span class="mm-pill warn">Grounded answer · unverified lines removed</span>'
+    if status == "no_llm":
+        return '<span class="mm-pill info">Filing headlines · no language model key</span>'
+    return '<span class="mm-pill good">Grounded answer · fact-checked</span>'
+
+
+def render_sources_html(sources: list, cited: list | None = None) -> str:
+    """Render source cards with PDF links. Passages the answer actually cites are marked 'cited' and listed first
+    (MedEvolv Mentor's SourceList); the rest are shown as 'not cited' so nothing looks more supported than it is."""
+    cited_set = set(cited) if cited is not None else set(range(1, len(sources) + 1))
+    order = sorted(range(1, len(sources) + 1), key=lambda n: (n not in cited_set, n))
     cards = []
-    for i, s in enumerate(sources, 1):
+    for i in order:
+        s = sources[i - 1]
+        is_cited = i in cited_set
+        def _v(key, default=""):
+            val = s.get(key)
+            return default if val is None or str(val).strip().lower() in {"nan", "none", ""} else val
         pdf_url = s.get("pdf_url")
         pdf_html = (
             f'<a href="{pdf_url}" target="_blank" class="mm-pdf-link">📄 View Official NSE Filing PDF ↗</a>'
             if pdf_url and pdf_url != "#" else
             '<span style="font-size:11px; color:var(--muted); font-family:var(--mono);">PDF Pending Archival</span>'
         )
-        tag_val = s.get("tag") or s.get("category", "Notice")
-        score = s.get("importance_score", 50)
+        tag_val = _v("tag") or _v("category", "Notice")
+        score = _v("importance_score", 50)
+        cite_pill = '<span class="mm-pill good">cited</span>' if is_cited else '<span class="mm-pill info">not cited</span>'
         cards.append(
-            f'<div class="mm-src cited">'
+            f'<div class="mm-src{" cited" if is_cited else ""}">'
             f'<div class="mm-src-head">'
             f'<span class="mm-src-n">[{i}]</span>'
-            f'<span class="mm-pill good">cited</span>'
+            f'{cite_pill}'
             f'<span class="mm-pill info">{esc(tag_val)}</span>'
             f'<span class="mm-pill info">score {score}/100</span>'
             f'</div>'
-            f'<div class="mm-src-where">{esc(s.get("company"))} ({esc(s.get("ticker"))}) · {esc(s.get("date"))} {esc(s.get("time", ""))}</div>'
-            f'<div class="mm-src-ex"><b>{esc(s.get("headline"))}</b><br/>{esc(s.get("summary") or s.get("description", ""))}</div>'
+            f'<div class="mm-src-where">{esc(_v("company"))} ({esc(_v("ticker"))}) · {esc(_v("date"))} {esc(_v("time"))}</div>'
+            f'<div class="mm-src-ex"><b>{esc(_v("headline"))}</b></div>'
             f'<div>{pdf_html}</div>'
             f'</div>'
         )
@@ -784,13 +839,14 @@ with tab_ask:
                 single [label="🔍 Single Entity\\nDirect Match"];
                 hybrid [label="⚡ Hybrid Retrieval\\n(BM25 + MiniLM RRF)"];
                 llm [label="🤖 Evidence-Grounded\\nSynthesis"];
+                verify [label="🔎 Fact check\\n(citations, numbers,\\ncompanies)"];
                 out [label="✅ Cited Answer\\n+ Full Trace", fillcolor="#e3f3ea", color="#9cc9ad", fontcolor="#1d7a46"];
                 refuse [label="🚫 Strict Decline\\n(0 False Citations)", fillcolor="#f8e3e4", color="#e0a8ac", fontcolor="#b0323a"];
 
                 q -> guard -> route;
                 route -> cong; route -> hi; route -> single;
                 cong -> hybrid; hi -> hybrid; single -> hybrid;
-                hybrid -> llm -> out;
+                hybrid -> llm -> verify -> out;
                 guard -> refuse [style=dashed, label="out of scope"];
                 hybrid -> refuse [style=dashed, label="no filings"];
             }}
@@ -876,13 +932,9 @@ with tab_ask:
             else:
                 # Status & Route Pills
                 tool_ctx = msg.get("tool_context", "ready")
-                is_refusal = not should_show_sources(msg.get("content", ""), msg.get("sources", []), tool_ctx)
-                
-                status_pill = (
-                    '<span class="mm-pill bad">Declined · out of scope</span>' if "out_of_domain" in tool_ctx or "virat" in msg.get("content", "").lower() else
-                    '<span class="mm-pill warn">Declined · not in 7-day database</span>' if is_refusal else
-                    '<span class="mm-pill good">Grounded answer</span>'
-                )
+                is_refusal = (not should_show_sources(msg.get("content", ""), msg.get("sources", []), tool_ctx)
+                              or msg.get("status") == "insufficient")
+                status_pill = status_pill_html(tool_ctx, is_refusal, msg.get("status", ""))
 
                 route_label = (
                     "Conglomerate group · multi-entity route" if "group:" in tool_ctx else
@@ -902,8 +954,10 @@ with tab_ask:
 
                 # Source Dossier
                 if not is_refusal and msg.get("sources"):
-                    with st.expander(f"Official NSE Source Filings ({len(msg['sources'])} documents cited)", expanded=True):
-                        st.html(render_sources_html(msg["sources"]))
+                    cited_prev = msg.get("cited")
+                    n_cited = len(cited_prev) if cited_prev is not None else len(msg["sources"])
+                    with st.expander(f"Official NSE Source Filings ({n_cited} of {len(msg['sources'])} cited)", expanded=True):
+                        st.html(render_sources_html(msg["sources"], cited_prev))
 
     # 4. Input & Execution Loop
     question = st.chat_input("Ask a company, conglomerate (Tata, Adani), corporate event or filing question…")
@@ -912,7 +966,9 @@ with tab_ask:
     if active_query:
         st.session_state.messages.append({"role": "user", "content": active_query})
         with st.chat_message("user", avatar="🧑‍💼"):
+            st.html('<span class="mt-q-anchor"></span>')
             st.markdown(active_query)
+        scroll_to_latest_question()          # bring the new question (and the live progress under it) into view
 
         with st.chat_message("assistant", avatar="📈"):
             t_start = time.time()
@@ -983,30 +1039,24 @@ with tab_ask:
                     "hits": hits_list
                 })
 
-                # Stage 4: Grounded Synthesis
-                box.markdown("🤖 **Model Synthesis** · Writing answer strictly from cited filing evidence...")
-                t3 = time.time()
-                full_response = st.write_stream(stream_gen)
-                ms_llm = (time.time() - t3) * 1000
-                steps.append({
-                    "stage": "llm",
-                    "status": "good",
-                    "icon": "🤖",
-                    "title": "Grounded answer synthesis",
-                    "detail": "Model synthesized response strictly from cited evidence without pre-trained hallucination.",
-                    "ms": ms_llm
-                })
+                # Stage 4+: the grounding steps that really ran (evidence, draft, fact check, repair, citations)
+                result = agent.last_result
+                if result is not None:
+                    steps.extend(result.steps)
+                    box.markdown("🔎 **Fact check** · " + (result.steps[-1]["title"] if result.steps else "done"))
 
                 total_ms = (time.time() - t_start) * 1000
                 box.update(label=f"Done · {len(steps)} steps in {total_ms / 1000:.2f} s", state="complete", expanded=False)
 
+            # The answer is written OUTSIDE the progress box (inside it, it was hidden when the box collapsed).
+            # It was fully generated and fact-checked before this point; nothing unverified is ever shown.
+            full_response = st.write_stream(stream_gen)
+            cited = result.cited if result is not None else None
+
             # Post-execution rendering
-            is_refusal = not should_show_sources(full_response, retrieved_docs, tool_context)
-            status_pill = (
-                '<span class="mm-pill bad">Declined · out of scope</span>' if "out_of_domain" in tool_context or "virat" in full_response.lower() else
-                '<span class="mm-pill warn">Declined · not in 7-day database</span>' if is_refusal else
-                '<span class="mm-pill good">Grounded answer</span>'
-            )
+            is_refusal = (not should_show_sources(full_response, retrieved_docs, tool_context)
+                          or (result is not None and result.status == "insufficient"))
+            status_pill = status_pill_html(tool_context, is_refusal, result.status if result is not None else "")
             route_label = (
                 "Conglomerate group · multi-entity route" if "group:" in tool_context else
                 "High-impact scanner · priority route" if "top_filings" in tool_context else
@@ -1021,18 +1071,22 @@ with tab_ask:
 
             # Sources Expander
             if not is_refusal and retrieved_docs:
-                with st.expander(f"Official NSE Source Filings ({len(retrieved_docs)} documents cited)", expanded=True):
-                    st.html(render_sources_html(retrieved_docs))
+                n_cited = len(cited) if cited is not None else len(retrieved_docs)
+                with st.expander(f"Official NSE Source Filings ({n_cited} of {len(retrieved_docs)} cited)", expanded=True):
+                    st.html(render_sources_html(retrieved_docs, cited))
 
             # Append to session state
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": full_response,
                 "sources": retrieved_docs if not is_refusal else [],
+                "cited": cited,
+                "status": result.status if result is not None else "",
                 "tool_context": tool_context,
                 "steps": steps,
                 "ms": total_ms
             })
+        scroll_to_latest_question()          # results are in: show the question with its answer right below it
 
 # ----------------- TAB 2: 🔍 HOW IT WORKS -----------------
 with tab_how:
@@ -1062,13 +1116,15 @@ with tab_how:
         single [label="Single Entity\\nSearch"];
         hybrid [label="Hybrid Retrieval\\n(BM25 + Vector RRF)"];
         llm [label="Grounded Synthesis\\n(Evidence Only)"];
+        verify [label="Fact check: citations,\\nnumbers, companies\\n(repair or drop)"];
         out [label="Cited Answer\\n+ Full Trace", fillcolor="#e3f3ea", color="#9cc9ad"];
         refuse [label="Decline (Zero False\\nSource Cards)", fillcolor="#f8e3e4", color="#e0a8ac"];
 
         q -> guard -> route;
         route -> cong; route -> hi; route -> single;
         cong -> hybrid; hi -> hybrid; single -> hybrid;
-        hybrid -> llm -> out;
+        hybrid -> llm -> verify -> out;
+        verify -> refuse [style=dashed, label="nothing verified"];
         guard -> refuse [style=dashed, label="out of scope"];
         hybrid -> refuse [style=dashed, label="no filings"];
     }}

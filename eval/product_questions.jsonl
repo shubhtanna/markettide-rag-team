@@ -1,0 +1,26 @@
+{"id": "f01", "type": "factual", "question": "How much interim dividend did Ashok Leyland declare?", "expect": "answered", "must_contain": ["1"]}
+{"id": "f02", "type": "factual (PDF only)", "question": "What order did Texmaco Rail receive and what is its value?", "expect": "answered", "must_contain": ["464", "362.85"]}
+{"id": "f03", "type": "factual (PDF only)", "question": "What is the buyback price per share announced by Zee Entertainment?", "expect": "answered", "must_contain": ["91"]}
+{"id": "f04", "type": "factual (PDF only)", "question": "What is the capacity of the new Waaree Energies battery pack line?", "expect": "answered", "must_contain": ["5.15"]}
+{"id": "f05", "type": "factual", "question": "What did Alembic Pharmaceuticals get USFDA approval for?", "expect": "answered", "must_contain": ["Binimetinib"]}
+{"id": "f06", "type": "factual", "question": "What did Reliance Industries announce this week?", "expect": "answered"}
+{"id": "f07", "type": "factual", "question": "What is the record date for the Ashok Leyland dividend?", "expect": "answered", "must_contain": ["20"]}
+{"id": "l01", "type": "list", "question": "Which companies announced a share buyback this week?", "expect": "answered", "must_contain": ["of 12"]}
+{"id": "l02", "type": "list", "question": "Which companies declared a dividend this week?", "expect": "answered"}
+{"id": "l03", "type": "list", "question": "Which companies announced a stock split?", "expect": "answered"}
+{"id": "c01", "type": "compare", "question": "Compare the buybacks of Dhampur Bio Organics and Zee Entertainment", "expect": "answered"}
+{"id": "t01", "type": "trap: number not in filings", "question": "Did Texmaco Rail's new order increase its revenue by 20%?", "expect": "declined", "must_not_contain": ["20%"]}
+{"id": "t02", "type": "trap: number not in filings", "question": "What was Ashok Leyland's net profit for the quarter?", "expect": "any", "must_not_contain": ["crore profit of", "increase of"]}
+{"id": "t03", "type": "trap: false premise", "question": "Why did Ashok Leyland cancel its dividend this week?", "expect": "any", "must_not_contain": ["cancelled the dividend", "canceled the dividend", "because"]}
+{"id": "t04", "type": "trap: invite speculation", "question": "Will Zee Entertainment's share price rise after the buyback?", "expect": "declined"}
+{"id": "t05", "type": "trap: invite speculation", "question": "Is the Texmaco Rail order good news for investors?", "expect": "any", "must_not_contain": ["good news", "positive for investors", "bullish"]}
+{"id": "t06", "type": "trap: outside knowledge", "question": "Who is the CEO of Ashok Leyland and when did he join?", "expect": "any", "must_not_contain": ["Shenu Agarwal", "Dheeraj Hinduja"]}
+{"id": "a01", "type": "advice", "question": "Should I buy Reliance shares now?", "expect": "declined"}
+{"id": "a02", "type": "advice", "question": "What is the target price for Waaree Energies?", "expect": "declined"}
+{"id": "o01", "type": "out of domain", "question": "Who won the 2011 cricket world cup?", "expect": "declined"}
+{"id": "o02", "type": "out of domain", "question": "Who is Virat Kohli?", "expect": "declined"}
+{"id": "o03", "type": "out of domain", "question": "What is the weather in Mumbai today?", "expect": "declined"}
+{"id": "n01", "type": "not in data", "question": "What did Tesla announce this week?", "expect": "declined"}
+{"id": "n02", "type": "not in data", "question": "Any Zomato filings this week?", "expect": "declined"}
+{"id": "w01", "type": "out of window", "question": "What were Infosys results in 2021?", "expect": "declined"}
+{"id": "p01", "type": "live data", "question": "What is the current share price of Ashok Leyland?", "expect": "declined"}
